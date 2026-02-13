@@ -1,35 +1,28 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import { Routes, Route, Navigate } from "react-router-dom"
+import DoctorLogin from "./pages/DoctorLogin"
+import DoctorDashboard from "./pages/DoctorDashboard"
+import DoctorAppts from "./pages/DoctorAppts"
+import DoctorVC from "./pages/DoctorVC"
+import DoctorMySched from "./pages/DoctorMySched"
 
-function App() {
-  const [count, setCount] = useState(0)
-
+export default function App() {
   return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.jsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
+    <div className="font-hammersmith">
+      <Routes>
+
+        {/* ROOT HANDLER */}
+        <Route path="/" element={<Navigate to="/doctor/login" replace />} />
+
+        <Route path="/doctor/login" element={<DoctorLogin />} />
+        <Route path="/doctor/dashboard" element={<DoctorDashboard />} />
+        <Route path="/doctor/appointments" element={<DoctorAppts />} />
+        <Route path="/doctor/vc" element={<DoctorVC />} />
+        <Route path="/doctor/schedule" element={<DoctorMySched />} />
+
+        {/* SAFETY NET */}
+        <Route path="*" element={<Navigate to="/doctor/login" replace />} />
+
+      </Routes>
+    </div>
   )
 }
-
-export default App
