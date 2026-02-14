@@ -15,7 +15,7 @@ import {
 import { useNavigate } from "react-router-dom"
 import { useEffect, useState } from "react"
 
-export default function DoctorVC() {
+export default function DoctorVC({ onLogout }) {
   const navigate = useNavigate()
   const [showZoomModal, setShowZoomModal] = useState(false)
   const [activeConference, setActiveConference] = useState(null)
@@ -27,8 +27,7 @@ export default function DoctorVC() {
   const [isCallStarted, setIsCallStarted] = useState(false)
 
   useEffect(() => {
-    const isLoggedIn = localStorage.getItem("hf_logged_in")
-    if (!isLoggedIn) navigate("/doctor/login")
+    // Authentication is handled by route protection
     
     loadData()
     
@@ -73,8 +72,12 @@ export default function DoctorVC() {
   }
 
   const handleLogout = () => {
-    localStorage.removeItem("hf_logged_in")
-    navigate("/doctor/login")
+    if (onLogout) {
+      onLogout()
+    } else {
+      localStorage.removeItem("hf_logged_in")
+      navigate("/doctor/login")
+    }
   }
 
   const startCall = () => {

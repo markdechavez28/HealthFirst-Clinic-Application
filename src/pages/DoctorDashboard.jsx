@@ -10,14 +10,13 @@ import {
 import { useNavigate } from "react-router-dom"
 import { useEffect, useState } from "react"
 
-export default function DoctorDashboard() {
+export default function DoctorDashboard({ onLogout }) {
   const navigate = useNavigate()
   const [appointments, setAppointments] = useState([])
   const [requests, setRequests] = useState([])
   const [conferences, setConferences] = useState([])
 
   useEffect(() => {
-    if (!localStorage.getItem("hf_logged_in")) navigate("/doctor/login")
     
     // Load data from localStorage or initialize
     loadData()
@@ -92,8 +91,12 @@ export default function DoctorDashboard() {
   }
 
   const handleLogout = () => {
-    localStorage.removeItem("hf_logged_in")
-    navigate("/doctor/login")
+    if (onLogout) {
+      onLogout()
+    } else {
+      localStorage.removeItem("hf_logged_in")
+      navigate("/doctor/login")
+    }
   }
 
   // Filter today's appointments (Ongoing or Upcoming)

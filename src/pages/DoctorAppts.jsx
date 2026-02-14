@@ -11,7 +11,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 
-export default function DoctorAppts() {
+export default function DoctorAppts({ onLogout }) {
   const navigate = useNavigate();
   const [appointments, setAppointments] = useState([]);
   const [requests, setRequests] = useState([]);
@@ -19,7 +19,6 @@ export default function DoctorAppts() {
 
   // Login check and data initialization
   useEffect(() => {
-    if (!localStorage.getItem("hf_logged_in")) navigate("/doctor/login");
     
     loadData();
     
@@ -69,8 +68,12 @@ export default function DoctorAppts() {
   };
 
   const handleLogout = () => {
-    localStorage.removeItem("hf_logged_in");
-    navigate("/doctor/login");
+    if (onLogout) {
+      onLogout();
+    } else {
+      localStorage.removeItem("hf_logged_in");
+      navigate("/doctor/login");
+    }
   };
 
   // Accept request - moves to appointments AND creates a conference

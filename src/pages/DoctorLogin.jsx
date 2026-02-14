@@ -1,21 +1,18 @@
 import { useState } from "react"
-import { useNavigate } from "react-router-dom"
 import { Eye, EyeOff } from "lucide-react"
 
-export default function DoctorLogin() {
-  const navigate = useNavigate()
+export default function DoctorLogin({ onLogin }) {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
+  const [error, setError] = useState("")
 
   const handleLogin = (e) => {
     e.preventDefault()
-    if (email === "doctor@hf.com" && password === "password") {
-      localStorage.setItem("hf_logged_in", "true")
-      navigate("/doctor/dashboard")
-    } 
-    else {
-      alert("Invalid credentials")
+    setError("")
+    const res = onLogin?.({ email, password })
+    if (!res?.ok) {
+      setError(res?.message || "Invalid credentials")
     }
   }
 
@@ -76,6 +73,11 @@ export default function DoctorLogin() {
                     </button>
                 </div>
 
+                {error && (
+                  <div className="mt-2 mb-2 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
+                    {error}
+                  </div>
+                )}
                 <button
                     type="submit"
                     className="mt-2 mb-4 bg-lightgreen text-white py-1 rounded-lg hover:bg-bgdarkblue"
