@@ -20,6 +20,9 @@ import DoctorMySched from "./pages/DoctorMySched";
 import AdminLogin from "./pages/AdminLogin.jsx";
 import ManageUser from "./pages/ManageUser.jsx";
 
+// Home page
+import HomePage from "./pages/HomePage.jsx";
+
 // Local storage utilities
 const LS_KEYS = {
   auth: "hf_auth",
@@ -224,11 +227,12 @@ function AdminRoutes() {
 }
 
 export default function App() {
+  // Ensure home page is always accessible
   return (
     <div className="font-hammersmith">
       <Routes>
-        {/* ROOT HANDLER */}
-        <Route path="/" element={<Navigate to="/patient/login" replace />} />
+        {/* ROOT HANDLER - Always show home page */}
+        <Route path="/" element={<HomePage />} />
 
         {/* Patient Routes */}
         <Route path="/patient/*" element={<PatientRoutes />} />
@@ -240,7 +244,7 @@ export default function App() {
         <Route path="/admin/*" element={<AdminRoutes />} />
 
         {/* SAFETY NET */}
-        <Route path="*" element={<Navigate to="/patient/login" replace />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </div>
   );
