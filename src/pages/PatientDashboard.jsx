@@ -1,12 +1,21 @@
 import React, { useMemo, useState } from "react";
 import HealthFirstLogo from "../components/HealthFirstLogo.jsx";
 import { Icon } from "../components/Icon.jsx";
+import { RecommendedDoctors } from "../components/RecommendedDoctors.jsx";
+import { getTopRecommendedDoctors } from "../utils/recommendationEngine.js";
 
 const NAV = [
   { key: "dashboard", label: "Dashboard", icon: "grid" },
   { key: "appointments", label: "Appointments", icon: "calendar" },
   { key: "video", label: "Video Conference", icon: "video" },
   { key: "logs", label: "Consultation Log", icon: "clock" },
+];
+
+const ALL_DOCTORS = [
+  { id: "doc1", name: "Dr. Mark De Chavez", specialty: "Dermatologist", available: "Available Today" },
+  { id: "doc2", name: "Dr. Aaron Bayten", specialty: "Internal Medicine", available: "Available on Thursday" },
+  { id: "doc3", name: "Dr. Andra Jimenez", specialty: "Family Doctor", available: "Available on Friday" },
+  { id: "doc4", name: "Dr. Mica Pimentel", specialty: "Pediatrician", available: "Available Today" },
 ];
 
 function Badge({ children }) {
@@ -31,6 +40,14 @@ export function PatientDashboard({ patient, onLogout }) {
 
   const userId = patient?.id ?? "—";
   const name = patient?.name ?? "Patient";
+
+  // Get recommended doctors from appointment history
+  const recommendedDoctors = useMemo(() => {
+    if (!patient?.appointmentHistory || patient.appointmentHistory.length === 0) {
+      return [];
+    }
+    return getTopRecommendedDoctors(patient.appointmentHistory, ALL_DOCTORS, 3);
+  }, [patient]);
 
   const cards = useMemo(
     () => [
@@ -171,6 +188,11 @@ export function PatientDashboard({ patient, onLogout }) {
                     </div>
                   </div>
                 </div>
+
+                {/* Recommended Doctors Section */}
+                {recommendedDoctors.length > 0 && (
+                  <RecommendedDoctors doctors={recommendedDoctors} />
+                )}
 
                 {/* Placeholder content area for other pages */}
                 <div className="mt-6 rounded-2xl border border-dashed border-slate-300 p-4 text-sm text-slate-600">

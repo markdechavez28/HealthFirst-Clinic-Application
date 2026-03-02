@@ -76,7 +76,40 @@ function PatientRoutes() {
 
   const onRegister = (payload) => {
     setLS(LS_KEYS.auth, { email: payload.email, password: payload.password });
-    setLS(LS_KEYS.patient, { name: payload.fullName, id: payload.patientId || "0001" });
+    
+    // Initialize patient with mock appointment history for recommendation algorithm
+    const patientData = {
+      name: payload.fullName,
+      id: payload.patientId || "0001",
+      appointmentHistory: [
+        {
+          doctorId: "doc1",
+          doctorName: "Dr. Mark De Chavez",
+          specialty: "Dermatologist",
+          date: "2025-12-20",
+          rating: 5,
+          notes: "Skin condition follow-up"
+        },
+        {
+          doctorId: "doc2",
+          doctorName: "Dr. Aaron Bayten",
+          specialty: "Internal Medicine",
+          date: "2025-11-15",
+          rating: 4,
+          notes: "General checkup"
+        },
+        {
+          doctorId: "doc1",
+          doctorName: "Dr. Mark De Chavez",
+          specialty: "Dermatologist",
+          date: "2025-10-10",
+          rating: 5,
+          notes: "Initial consultation"
+        }
+      ]
+    };
+    
+    setLS(LS_KEYS.patient, patientData);
     const next = { isAuthed: true };
     setSession(next);
     setLS(LS_KEYS.session, next);

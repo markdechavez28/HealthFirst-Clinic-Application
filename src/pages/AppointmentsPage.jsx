@@ -1,8 +1,10 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { ChooseTime } from "./ChooseTime.jsx";
 import { YourDetails } from "./YourDetails.jsx";
 import { ConfirmBooking } from "./ConfirmBooking.jsx";
 import { Icon } from "../components/Icon.jsx";
+import { RecommendedDoctors } from "../components/RecommendedDoctors.jsx";
+import { getTopRecommendedDoctors } from "../utils/recommendationEngine.js";
 
 const REASONS = [
   "General Appointment",
@@ -28,10 +30,18 @@ const DOCTORS = [
   { name: "Dr. Mica Pimentel", specialty: "Pediatrician", available: "Available Today" },
 ];
 
-export function AppointmentsPage() {
+export function AppointmentsPage({ patient = {} }) {
   const [step, setStep] = useState(1);
   const [selectedReason, setSelectedReason] = useState(null);
   const [selectedDoctor, setSelectedDoctor] = useState(null);
+
+  // Get recommended doctors from appointment history
+  const recommendedDoctors = useMemo(() => {
+    if (!patient?.appointmentHistory || patient.appointmentHistory.length === 0) {
+      return [];
+    }
+    return getTopRecommendedDoctors(patient.appointmentHistory, DOCTORS, 3);
+  }, [patient]);
 
   return (
     <div className="p-6">
@@ -50,6 +60,19 @@ export function AppointmentsPage() {
 
       {step === 1 && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Recommendations */}
+          {recommendedDoctors.length > 0 && (
+            <div className="lg:col-span-2">
+              <RecommendedDoctors
+                doctors={recommendedDoctors}
+                onSelectDoctor={(doctor) => {
+                  setSelectedDoctor(doctor);
+                }}
+                compact={true}
+              />
+            </div>
+          )}
+
           {/* Reasons */}
           <div>
             <h2 className="text-xl font-extrabold text-slate-900">

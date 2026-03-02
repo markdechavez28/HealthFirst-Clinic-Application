@@ -5,7 +5,7 @@ import { AppointmentsPage } from "./AppointmentsPage.jsx";
 export default function AppointmentsWrapper({ patient, onLogout }) {
   return (
     <DashboardLayout patient={patient} active="appointments" onLogout={onLogout}>
-      <AppointmentsPage />
+      <AppointmentsPage patient={patient} />
     </DashboardLayout>
   );
 }
