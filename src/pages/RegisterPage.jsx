@@ -12,29 +12,89 @@ function validatePassword(pw) {
   return rules;
 }
 
+function validateContactNumber(number) {
+  // Philippines format: +63 followed by 10 digits (e.g., +63xxxxxxxxxx no spaces for validation)
+  const philippinesRegex = /^\+63\d{10}$/;
+  return philippinesRegex.test(number.replace(/\s/g, ""));
+}
+
+function formatContactNumber(input) {
+  // Remove all non-digit characters except +
+  let cleaned = input.replace(/[^\d+]/g, "");
+  
+  // Ensure it starts with +63
+  if (!cleaned.startsWith("+63")) {
+    return "+63";
+  }
+  
+  // Extract digits after +63
+  const digits = cleaned.replace("+63", "");
+  
+  // Format as +63 xxx xxx xxxx (limit to 10 digits)
+  if (digits.length <= 3) {
+    return `+63 ${digits}`;
+  } else if (digits.length <= 6) {
+    return `+63 ${digits.slice(0, 3)} ${digits.slice(3)}`;
+  } else {
+    return `+63 ${digits.slice(0, 3)} ${digits.slice(3, 6)} ${digits.slice(6, 10)}`;
+  }
+}
+
 export default function RegisterPage({ onRegister, onGoLogin }) {
-  const [fullName, setFullName] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [middleName, setMiddleName] = useState("");
+  const [surname, setSurname] = useState("");
   const [email, setEmail] = useState("");
-  const [contactNumber, setContactNumber] = useState("");
+  const [contactNumber, setContactNumber] = useState("+63 ");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
 
   const rules = useMemo(() => validatePassword(password), [password]);
   const allRulesOk = rules.every((r) => r.ok);
 
-  const submit = (e) => {
+  const handleContactNumberChange = (e) => {
+    const formatted = formatContactNumber(e.target.value);
+    setContactNumber(formatted);
+  };
+
+  const submit = async (e) => {
     e.preventDefault();
     setError("");
+    setSuccess("");
 
-    if (!fullName.trim()) return setError("Please enter your full name.");
+    if (!firstName.trim()) return setError("Please enter your first name.");
+    if (!surname.trim()) return setError("Please enter your surname.");
     if (!email.trim()) return setError("Please enter your email.");
     if (!contactNumber.trim()) return setError("Please enter your contact number.");
+    if (!validateContactNumber(contactNumber)) {
+      return setError("Contact number must be in format +63 xxx xxx xxxx (Philippines).");
+    }
     if (!allRulesOk) return setError("Password does not meet the requirements.");
     if (password !== confirm) return setError("Passwords do not match.");
 
-    const res = onRegister({ fullName, email, contactNumber, password });
-    if (!res?.ok) setError(res?.message || "Registration failed.");
+    // Combine name parts
+    const fullName = [firstName, middleName, surname].filter(n => n.trim()).join(" ");
+    // Remove spaces for database storage
+    const cleanContactNumber = contactNumber.replace(/\s/g, "");
+
+    const res = await onRegister({ fullName, email, contactNumber: cleanContactNumber, password });
+    if (!res?.ok) {
+      setError(res?.message || "Registration failed.");
+    } else {
+      // Show success message but DON'T auto-navigate
+      setSuccess("Account created successfully! Please log in with your credentials.");
+      setFirstName("");
+      setMiddleName("");
+      setSurname("");
+      setEmail("");
+      setContactNumber("+63 ");
+      setPassword("");
+      setConfirm("");
+      // Redirect to login after 2 seconds
+      setTimeout(() => onGoLogin(), 2000);
+    }
   };
 
   return (
@@ -45,13 +105,32 @@ export default function RegisterPage({ onRegister, onGoLogin }) {
       </div>
 
       <form onSubmit={submit} className="mt-7 mx-auto max-w-sm">
-        <label className="block text-xs font-semibold text-slate-700">Full Name</label>
+        <label className="block text-xs font-semibold text-slate-700">First Name</label>
         <input
-          value={fullName}
-          onChange={(e) => setFullName(e.target.value)}
+          value={firstName}
+          onChange={(e) => setFirstName(e.target.value)}
           className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-hf-blue/40 focus:border-hf-blue"
           type="text"
-          placeholder="e.g., Sarah Miller"
+          placeholder="e.g., Sarah"
+          required
+        />
+
+        <label className="mt-4 block text-xs font-semibold text-slate-700">Middle Name <span className="text-slate-500">(optional)</span></label>
+        <input
+          value={middleName}
+          onChange={(e) => setMiddleName(e.target.value)}
+          className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-hf-blue/40 focus:border-hf-blue"
+          type="text"
+          placeholder="e.g., Anne"
+        />
+
+        <label className="mt-4 block text-xs font-semibold text-slate-700">Surname</label>
+        <input
+          value={surname}
+          onChange={(e) => setSurname(e.target.value)}
+          className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-hf-blue/40 focus:border-hf-blue"
+          type="text"
+          placeholder="e.g., Miller"
           required
         />
 
@@ -68,12 +147,13 @@ export default function RegisterPage({ onRegister, onGoLogin }) {
         <label className="mt-4 block text-xs font-semibold text-slate-700">Contact Number</label>
         <input
           value={contactNumber}
-          onChange={(e) => setContactNumber(e.target.value)}
-          className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-hf-blue/40 focus:border-hf-blue"
+          onChange={handleContactNumberChange}
+          className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-hf-blue/40 focus:border-hf-blue font-mono"
           type="tel"
-          placeholder="e.g., +1 (555) 123-4567"
+          placeholder="+63 xxx xxx xxxx"
           required
         />
+        <p className="mt-1 text-xs text-slate-500">Format: +63 followed by 10-digit number</p>
 
         <label className="mt-4 block text-xs font-semibold text-slate-700">Password</label>
         <input
@@ -110,6 +190,12 @@ export default function RegisterPage({ onRegister, onGoLogin }) {
         {error ? (
           <div className="mt-3 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
             {error}
+          </div>
+        ) : null}
+
+        {success ? (
+          <div className="mt-3 rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2 text-sm text-emerald-700">
+            {success}
           </div>
         ) : null}
 

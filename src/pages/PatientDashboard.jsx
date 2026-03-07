@@ -1,11 +1,12 @@
 import React, { useMemo, useState, useEffect } from "react";
 import { Icon } from "../components/Icon.jsx";
 import { supabase } from "../lib/supabase";
+import { useNavigate } from "react-router-dom";
 import { getUpcomingAppointment } from "../services/patientService";
 
 function Badge({ children }) {
   return (
-    <span className="ml-2 inline-flex items-center justify-center rounded-full bg-red-600 px-2 py-0.5 text-[11px] font-bold text-white">
+    <span className="ml-2 inline-flex items-center justify-center rounded-md bg-red-600 px-2 py-0.5 text-[11px] font-bold text-white">
       {children}
     </span>
   );
@@ -13,13 +14,14 @@ function Badge({ children }) {
 
 function Card({ className = "", children }) {
   return (
-    <div className={"rounded-xl bg-hf-blue text-white shadow-card " + className}>
+    <div className={"rounded-lg bg-hf-blue text-white border border-hf-blue " + className}>
       {children}
     </div>
   );
 }
 
 export function PatientDashboard({ patient }) {
+  const navigate = useNavigate();
   const [search, setSearch] = useState("");
   const [upcoming, setUpcoming] = useState(null);
 
@@ -80,7 +82,7 @@ export function PatientDashboard({ patient }) {
                     <Icon name="clock" className="w-4 h-4" />
                   </span>
                   {upcoming.appointment_date} - {upcoming.time_slot} {upcoming.status && (
-                    <span className="ml-2 inline-flex items-center rounded-full bg-white/30 px-2 py-0.5 text-xs font-semibold text-slate-800">
+                    <span className="ml-2 inline-flex items-center rounded-md bg-white/30 px-2 py-0.5 text-xs font-semibold text-slate-800">
                       {upcoming.status}
                     </span>
                   )}
@@ -92,38 +94,6 @@ export function PatientDashboard({ patient }) {
           </div>
         ),
         right: null,
-      },
-      {
-        title: "Online Doctors",
-        left: (
-          <div className="mt-2">
-            <div className="text-3xl font-extrabold">4</div>
-            <div className="text-sm text-white/85">Available</div>
-          </div>
-        ),
-        right: (
-          <div className="opacity-80">
-            <Icon name="doctor" className="w-16 h-16" />
-          </div>
-        ),
-      },
-      {
-        title: (
-          <span className="inline-flex items-center">
-            New Messages <Badge>2</Badge>
-          </span>
-        ),
-        left: (
-          <div className="mt-2">
-            <div className="text-3xl font-extrabold">2</div>
-            <div className="text-sm text-white/85">Available</div>
-          </div>
-        ),
-        right: (
-          <div className="opacity-90">
-            <Icon name="message" className="w-16 h-16" />
-          </div>
-        ),
       },
     ],
     [upcoming]
@@ -163,22 +133,25 @@ export function PatientDashboard({ patient }) {
           ))}
         </div>
 
-        <div className="mt-6 rounded-2xl bg-hf-panel p-5">
+        <div className="mt-6 rounded-lg bg-hf-panel p-5">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             {/* Medical History */}
-            <div className="rounded-2xl bg-white shadow-soft overflow-hidden">
+            <div className="rounded-lg bg-white border border-slate-200 overflow-hidden">
               <div className="bg-hf-blue text-white px-5 py-3 flex items-center gap-2">
-                <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-white/15">
+                <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-white/15">
                   <Icon name="pill" className="w-5 h-5" />
                 </span>
                 <div className="text-lg font-extrabold">Medical History</div>
               </div>
               <div className="p-5 space-y-4">
-                <button className="w-full flex items-center gap-3 rounded-xl bg-slate-100 px-4 py-3 text-left font-semibold text-slate-700 hover:bg-slate-200/70">
+                <button 
+                  onClick={() => navigate("/patient/dashboard/logs")}
+                  className="w-full flex items-center gap-3 rounded-lg bg-slate-100 px-4 py-3 text-left font-semibold text-slate-700 hover:bg-slate-200 transition"
+                >
                   <span className="text-hf-blue">▶</span>
                   Recent Visits
                 </button>
-                <button className="w-full flex items-center gap-3 rounded-xl bg-slate-100 px-4 py-3 text-left font-semibold text-slate-700 hover:bg-slate-200/70">
+                <button className="w-full flex items-center gap-3 rounded-lg bg-slate-100 px-4 py-3 text-left font-semibold text-slate-700 hover:bg-slate-200 transition">
                   <span className="text-hf-blue">▶</span>
                   Prescription Records
                 </button>
@@ -186,19 +159,19 @@ export function PatientDashboard({ patient }) {
             </div>
 
             {/* Health Tips */}
-            <div className="rounded-2xl bg-white shadow-soft overflow-hidden">
+            <div className="rounded-lg bg-white border border-slate-200 overflow-hidden">
               <div className="bg-hf-blue text-white px-5 py-3 flex items-center gap-2">
-                <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-white/15">
+                <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-white/15">
                   <Icon name="heart" className="w-5 h-5" />
                 </span>
                 <div className="text-lg font-extrabold">Health Tips</div>
               </div>
               <div className="p-5 space-y-4">
-                <button className="w-full flex items-center gap-3 rounded-xl bg-slate-100 px-4 py-3 text-left font-semibold text-slate-700 hover:bg-slate-200/70">
+                <button className="w-full flex items-center gap-3 rounded-lg bg-slate-100 px-4 py-3 text-left font-semibold text-slate-700 hover:bg-slate-200 transition">
                   <span className="text-hf-blue">▶</span>
                   Telehealth Tips
                 </button>
-                <button className="w-full flex items-center gap-3 rounded-xl bg-slate-100 px-4 py-3 text-left font-semibold text-slate-700 hover:bg-slate-200/70">
+                <button className="w-full flex items-center gap-3 rounded-lg bg-slate-100 px-4 py-3 text-left font-semibold text-slate-700 hover:bg-slate-200 transition">
                   <span className="text-hf-blue">▶</span>
                   Wellness Articles
                 </button>

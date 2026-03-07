@@ -20,7 +20,7 @@ export function RecommendedDoctors({
       <div className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-sky-50 rounded-lg border border-blue-100">
         <div className="flex items-center gap-2 mb-3">
           <span className="text-sm font-semibold text-slate-700">
-            Based on your history
+            Recommended practitioners
           </span>
         </div>
         <div className="flex gap-2 overflow-x-auto pb-2">

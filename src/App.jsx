@@ -117,7 +117,7 @@ function PatientRoutes() {
       // Create mock appointment history to seed recommendations
       await createMockAppointmentHistory(userId);
     }
-    navigate("/patient/dashboard");
+    // Return success without navigating - let RegisterPage handle the redirect
     return { ok: true };
   };
 
