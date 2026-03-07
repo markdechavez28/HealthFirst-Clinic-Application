@@ -10,22 +10,84 @@ import {
 } from "../services/patientService.js";
 import { getRecommendedDoctorsForPatient } from "../services/recommendationService.js";
 
-const REASONS = [
-  "General Appointment",
-  "Follow-up Appointment",
-  "Eye Issues",
-  "Birth Control",
-  "Imaging Requisition",
-  "Infections",
-  "Joint/Muscle Pain",
-  "Laboratory Requisition",
-  "Men's Health Assessment",
-  "Naturopath",
-  "Prescriptions and Refills",
-  "Skin Issues",
-  "Women's Health Assessment",
-  "Travel Consult",
+const APPOINTMENT_TYPES = [
+  "General check-up",
+  "Follow-up visit",
+  "Eye examination",
+  "Skin consultation",
+  "Joint or bone pain",
+  "Women's health consultation",
+  "Men's health consultation",
+  "Child health consultation",
+  "Mental health consultation",
+  "Birth control consultation",
+  "Prescription renewal",
+  "Laboratory test request",
+  "Medical certificate / clearance",
+  "Travel health consultation",
 ];
+
+// Mapping of appointment types to recommended doctors (name, specialty)
+const APPOINTMENT_TYPE_DOCTORS = {
+  "General check-up": [
+    { name: "Dr. Alexandra Jimenex", specialty: "Family Medicine", isBest: true },
+    { name: "Dr. Nathaniel Oclinaria", specialty: "General Practitioner / Preventive Medicine", isBest: false },
+  ],
+  "Follow-up visit": [
+    { name: "Dr. Alexandra Jimenex", specialty: "Family Medicine", isBest: true },
+    { name: "Dr. Aaron Bayten", specialty: "Internal Medicine", isBest: false },
+    { name: "Dr. Nathaniel Oclinaria", specialty: "General Practitioner / Preventive Medicine", isBest: false },
+  ],
+  "Eye examination": [
+    { name: "Dr. Angela Samboa", specialty: "Ophthalmologist", isBest: true },
+    { name: "Dr. Alexandra Jimenex", specialty: "Family Medicine", isBest: false },
+  ],
+  "Skin consultation": [
+    { name: "Dr. Mark De Chavez", specialty: "Dermatologist", isBest: true },
+    { name: "Dr. Alexandra Jimenex", specialty: "Family Medicine", isBest: false },
+  ],
+  "Joint or bone pain": [
+    { name: "Dr. Hazama Kurooo", specialty: "Orthopedic Surgeon", isBest: true },
+    { name: "Dr. Aaron Bayten", specialty: "Internal Medicine", isBest: false },
+  ],
+  "Women's health consultation": [
+    { name: "Dr. Carl Jacob Regencia", specialty: "Obstetrics & Gynecology", isBest: true },
+    { name: "Dr. Alexandra Jimenex", specialty: "Family Medicine", isBest: false },
+  ],
+  "Men's health consultation": [
+    { name: "Dr. Aaron Bayten", specialty: "Internal Medicine", isBest: true },
+    { name: "Dr. Nathaniel Oclinaria", specialty: "General Practitioner / Preventive Medicine", isBest: false },
+  ],
+  "Child health consultation": [
+    { name: "Dr. Micaela Pimentel", specialty: "Pediatrician", isBest: true },
+    { name: "Dr. Alexandra Jimenex", specialty: "Family Medicine", isBest: false },
+  ],
+  "Mental health consultation": [
+    { name: "Dr. Josh Allen Lee", specialty: "Psychiatrist", isBest: true },
+    { name: "Dr. Alexandra Jimenex", specialty: "Family Medicine", isBest: false },
+  ],
+  "Birth control consultation": [
+    { name: "Dr. Carl Jacob Regencia", specialty: "Obstetrics & Gynecology", isBest: true },
+    { name: "Dr. Alexandra Jimenex", specialty: "Family Medicine", isBest: false },
+  ],
+  "Prescription renewal": [
+    { name: "Dr. Nathaniel Oclinaria", specialty: "General Practitioner / Preventive Medicine", isBest: true },
+    { name: "Dr. Alexandra Jimenex", specialty: "Family Medicine", isBest: false },
+    { name: "Dr. Aaron Bayten", specialty: "Internal Medicine", isBest: false },
+  ],
+  "Laboratory test request": [
+    { name: "Dr. Aaron Bayten", specialty: "Internal Medicine", isBest: true },
+    { name: "Dr. Nathaniel Oclinaria", specialty: "General Practitioner / Preventive Medicine", isBest: false },
+  ],
+  "Medical certificate / clearance": [
+    { name: "Dr. Nathaniel Oclinaria", specialty: "General Practitioner / Preventive Medicine", isBest: true },
+    { name: "Dr. Alexandra Jimenex", specialty: "Family Medicine", isBest: false },
+  ],
+  "Travel health consultation": [
+    { name: "Dr. Nathaniel Oclinaria", specialty: "General Practitioner / Preventive Medicine", isBest: true },
+    { name: "Dr. Aaron Bayten", specialty: "Internal Medicine", isBest: false },
+  ],
+};
 
 export function AppointmentsPage({ patient }) {
   const [step, setStep] = useState(1);
@@ -38,19 +100,26 @@ export function AppointmentsPage({ patient }) {
   const [selectedTime, setSelectedTime] = useState(null);
   const [details, setDetails] = useState({});
   const [error, setError] = useState("");
+  const [showSpecialtyWarning, setShowSpecialtyWarning] = useState(false);
+  const [specialtyWarning, setSpecialtyWarning] = useState("");
 
   useEffect(() => {
     listDoctors().then(setDoctors).catch(console.error);
   }, []);
 
   useEffect(() => {
-    // Fetch recommended doctors when patient loads
+    // Only fetch recommendations when an appointment type is selected
+    if (!selectedReason || !patient?.patientID) {
+      setRecommendedDoctors([]);
+      return;
+    }
+
     const loadRecommendations = async () => {
-      if (!patient?.patientID) return;
       setLoadingRecs(true);
       try {
         const recommended = await getRecommendedDoctorsForPatient(
           patient.patientID,
+          selectedReason,
           3
         );
         setRecommendedDoctors(recommended);
@@ -61,7 +130,43 @@ export function AppointmentsPage({ patient }) {
       }
     };
     loadRecommendations();
-  }, [patient]);
+  }, [selectedReason, patient]);
+
+  // Get filtered doctors based on appointment type
+  const getFilteredDoctors = () => {
+    if (!selectedReason) return [];
+
+    const recommendedDoctorNames = APPOINTMENT_TYPE_DOCTORS[selectedReason] || [];
+    return doctors.filter((doctor) =>
+      recommendedDoctorNames.some(
+        (rec) => rec.name.toLowerCase() === doctor.name.toLowerCase()
+      )
+    );
+  };
+
+  const handleSelectDoctor = (doctor) => {
+    setShowSpecialtyWarning(false);
+
+    // Check if specialty matches the appointment type
+    if (selectedReason) {
+      const recommendedDoctorsForReason = APPOINTMENT_TYPE_DOCTORS[selectedReason] || [];
+      const match = recommendedDoctorsForReason.find(
+        (rec) => rec.name.toLowerCase() === doctor.name.toLowerCase()
+      );
+
+      if (!match) {
+        // Doctor specialty doesn't match appointment type
+        setSpecialtyWarning(
+          `⚠️ Warning: ${doctor.name} specializes in "${doctor.specialty}", which may not be ideal for "${selectedReason}".`
+        );
+        setShowSpecialtyWarning(true);
+      }
+    }
+
+    setSelectedDoctor(doctor);
+  };
+
+  const filteredDoctors = getFilteredDoctors();
 
   const handleConfirmBooking = async () => {
     setError("");
@@ -143,25 +248,6 @@ export function AppointmentsPage({ patient }) {
 
       {step === 1 && (
         <div className="space-y-6">
-          {/* Recommendations */}
-          {loadingRecs && (
-            <div className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-sky-50 rounded-lg border border-blue-100">
-              <div className="flex items-center gap-2">
-                <div className="animate-spin h-4 w-4 rounded-full border-2 border-hf-blue border-t-transparent"></div>
-                <span className="text-sm font-semibold text-slate-700">Computing recommendations...</span>
-              </div>
-            </div>
-          )}
-          {!loadingRecs && recommendedDoctors.length > 0 && (
-            <RecommendedDoctors
-              doctors={recommendedDoctors}
-              onSelectDoctor={(doctor) => {
-                setSelectedDoctor(doctor);
-              }}
-              compact={true}
-            />
-          )}
-
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Reasons */}
             <div>
@@ -171,10 +257,14 @@ export function AppointmentsPage({ patient }) {
             <p className="text-sm text-slate-500 mb-4">Choose an appointment type</p>
 
             <div className="grid grid-cols-2 gap-3">
-              {REASONS.map((r) => (
+              {APPOINTMENT_TYPES.map((r) => (
                 <button
                   key={r}
-                  onClick={() => setSelectedReason(r)}
+                  onClick={() => {
+                    setSelectedReason(r);
+                    setSelectedDoctor(null);
+                    setShowSpecialtyWarning(false);
+                  }}
                   className={
                     "rounded-lg px-3 py-2 text-sm font-semibold transition " +
                     (selectedReason === r
@@ -188,12 +278,49 @@ export function AppointmentsPage({ patient }) {
             </div>
           </div>
 
-          {/* Doctors */}
+          {/* Doctors - Only show after appointment type is selected */}
+          {selectedReason && (
           <div>
             <h2 className="text-xl font-extrabold text-slate-900">
               Practitioners Available
             </h2>
             <p className="text-sm text-slate-500 mb-4">Choose a practitioner</p>
+
+            {/* Specialty Warning Popup */}
+            {showSpecialtyWarning && (
+              <div className="mb-4 rounded-lg border border-yellow-300 bg-yellow-50 p-4">
+                <div className="flex items-start gap-3">
+                  <span className="text-lg">⚠️</span>
+                  <div>
+                    <p className="text-sm font-semibold text-yellow-900">{specialtyWarning}</p>
+                    <p className="text-xs text-yellow-800 mt-1">
+                      You can continue, but this specialist may not be the best match for your needs.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Recommendations - Only show after appointment type is selected */}
+            {loadingRecs && (
+              <div className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-sky-50 rounded-lg border border-blue-100">
+                <div className="flex items-center gap-2">
+                  <div className="animate-spin h-4 w-4 rounded-full border-2 border-hf-blue border-t-transparent"></div>
+                  <span className="text-sm font-semibold text-slate-700">Computing recommendations...</span>
+                </div>
+              </div>
+            )}
+            {!loadingRecs && recommendedDoctors.length > 0 && (
+              <div className="mb-6">
+                <RecommendedDoctors
+                  doctors={recommendedDoctors}
+                  onSelectDoctor={(doctor) => {
+                    handleSelectDoctor(doctor);
+                  }}
+                  compact={true}
+                />
+              </div>
+            )}
 
             <div className="mb-4 rounded-xl border border-sky-200 bg-sky-50 p-3 flex items-center gap-3">
               <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-sky-200 text-hf-blue">
@@ -201,17 +328,21 @@ export function AppointmentsPage({ patient }) {
               </span>
               <div className="text-sm font-semibold text-slate-700">
                 Quick Book from <span className="font-bold">9:00 AM – 10:00 PM</span>
-                <div className="text-xs text-slate-500">* General Appointment only</div>
+                <div className="text-xs text-slate-500">* General check-up only</div>
               </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {doctors.map((d) => {
+              {filteredDoctors.map((d) => {
                 const isSelected = selectedDoctor?.doctorID === d.doctorID;
+                const recommendedDoctorNames = APPOINTMENT_TYPE_DOCTORS[selectedReason] || [];
+                const isBest = recommendedDoctorNames.some(
+                  (rec) => rec.isBest && rec.name.toLowerCase() === d.name.toLowerCase()
+                );
                 return (
                   <button
                     key={d.doctorID}
-                    onClick={() => setSelectedDoctor(d)}
+                    onClick={() => handleSelectDoctor(d)}
                     className={
                       "rounded-xl border bg-white p-4 shadow-soft text-left transition " +
                       (isSelected ? "border-hf-blue bg-sky-50" : "border-slate-200 hover:bg-slate-50")
@@ -224,6 +355,7 @@ export function AppointmentsPage({ patient }) {
                       <div className="flex-1">
                         <div className="font-extrabold text-slate-900">{d.name}</div>
                         <div className="text-sm text-slate-500">{d.specialty}</div>
+                        {isBest && <div className="text-xs text-emerald-700 font-bold mt-1">✓ Best Match</div>}
                       </div>
                     </div>
 
@@ -262,6 +394,7 @@ export function AppointmentsPage({ patient }) {
               </div>
             ) : null}
           </div>
+          )}
         </div>
         </div>
       )}
