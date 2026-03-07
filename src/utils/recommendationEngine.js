@@ -23,28 +23,42 @@ function calculateAvgRating(doctorId, appointmentHistory) {
 
 /**
  * Calculate recommendation score for a doctor
- * Based on visit frequency and average rating
+ * Different weights for new vs returning patients
  */
-function calculateScore(doctor, doctorVisits) {
+function calculateScore(doctor, doctorVisits, isNewPatient = true) {
   const visits = doctorVisits[doctor.id];
 
-  // If doctor has no history with patient, score is 0
-  if (!visits) return 0;
+  if (isNewPatient) {
+    // NEW USER: 80% specialization match + 20% rating
+    // (specialization is implicit - we only score docs that match the appointment type)
+    // Score is based on average rating only
+    if (!visits) return 80; // baseline specialization score if no history
+    
+    const ratingScore = (visits.avgRating / 5) * 20;
+    return 80 + ratingScore; // 80 (specialization) + up to 20 (rating)
+  } else {
+    // RETURNING USER: 60% specialization + 25% frequency + 15% rating
+    if (!visits) return 0;
 
-  // Weighted scoring: 60% frequency + 40% rating
-  const frequencyScore = Math.min(visits.count / 5, 1) * 60;
-  const ratingScore = (visits.avgRating / 5) * 40;
+    // Frequency: 5+ visits = 100% of the 25 points
+    const frequencyScore = Math.min(visits.count / 5, 1) * 25;
+    // Rating: 5 stars = 100% of the 15 points
+    const ratingScore = (visits.avgRating / 5) * 15;
+    // Specialization: always 60 (because we already filtered to specialty matches)
+    const specializationScore = 60;
 
-  return frequencyScore + ratingScore;
+    return specializationScore + frequencyScore + ratingScore;
+  }
 }
 
 /**
  * Get recommended doctors sorted by recommendation score
  * @param {Array} appointmentHistory - Array of past appointments
  * @param {Array} availableDoctors - Array of available doctors to recommend from
+ * @param {Boolean} isNewPatient - Whether the patient has no appointment history
  * @returns {Array} Doctors sorted by recommendation score (highest first)
  */
-export function getRecommendedDoctors(appointmentHistory, availableDoctors) {
+export function getRecommendedDoctors(appointmentHistory, availableDoctors, isNewPatient = true) {
   // Create a map of doctor visit statistics
   const doctorVisits = {};
 
@@ -73,7 +87,7 @@ export function getRecommendedDoctors(appointmentHistory, availableDoctors) {
   const scoredDoctors = availableDoctors
     .map((doctor) => ({
       ...doctor,
-      score: calculateScore(doctor, doctorVisits),
+      score: calculateScore(doctor, doctorVisits, isNewPatient),
       visits: doctorVisits[doctor.id]?.count || 0,
       avgRating: doctorVisits[doctor.id]?.avgRating || 0,
     }))
@@ -94,20 +108,17 @@ export function getTopRecommendedDoctors(
   availableDoctors,
   limit = 3
 ) {
+  // Determine if new patient (no appointment history)
+  const isNewPatient = !appointmentHistory || appointmentHistory.length === 0;
+  
   const allRecommended = getRecommendedDoctors(
     appointmentHistory,
-    availableDoctors
+    availableDoctors,
+    isNewPatient
   );
 
-  // Split into with history and without history
-  const withHistory = allRecommended.filter((d) => d.score > 0);
-  const withoutHistory = allRecommended.filter((d) => d.score === 0);
-
-  // Return top N prioritizing doctors with history
-  return [
-    ...withHistory.slice(0, limit),
-    ...withoutHistory.slice(0, Math.max(0, limit - withHistory.length)),
-  ];
+  // Return top N results
+  return allRecommended.slice(0, limit);
 }
 
 /**
