@@ -329,15 +329,6 @@ export function AppointmentsPage({ patient }) {
               </div>
             )}
 
-            <div className="mb-4 rounded-xl border border-sky-200 bg-sky-50 p-3 flex items-center gap-3">
-              <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-sky-200 text-hf-blue">
-                ⚡
-              </span>
-              <div className="text-sm font-semibold text-slate-700">
-                Quick Book from <span className="font-bold">9:00 AM – 10:00 PM</span>
-                <div className="text-xs text-slate-500">* General check-up only</div>
-              </div>
-            </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {filteredDoctors.map((d) => {
@@ -362,7 +353,7 @@ export function AppointmentsPage({ patient }) {
                       <div className="flex-1">
                         <div className="font-extrabold text-slate-900">{d.name}</div>
                         <div className="text-sm text-slate-500">{d.specialty}</div>
-                        {isBest && <div className="text-xs text-emerald-700 font-bold mt-1">⭐ Best Match</div>}
+                        {isBest && <div className="text-xs text-emerald-700 font-bold mt-1">Best Match</div>}
                       </div>
                     </div>
 

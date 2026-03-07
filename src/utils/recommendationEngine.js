@@ -120,7 +120,7 @@ export function formatRecommendationInfo(doctor) {
 
   const visitText = doctor.visits === 1 ? "1 visit" : `${doctor.visits} visits`;
   const ratingText =
-    doctor.avgRating > 0 ? ` • ⭐ ${doctor.avgRating.toFixed(1)}` : "";
+    doctor.avgRating > 0 ? ` • ${doctor.avgRating.toFixed(1)}` : "";
 
   return `${visitText}${ratingText}`;
 }
