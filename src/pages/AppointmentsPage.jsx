@@ -27,65 +27,65 @@ const APPOINTMENT_TYPES = [
   "Travel health consultation",
 ];
 
-// Mapping of appointment types to recommended doctors (name, specialty)
+// Mapping of appointment types to recommended doctors (without Dr. prefix for DB matching)
 const APPOINTMENT_TYPE_DOCTORS = {
   "General check-up": [
-    { name: "Dr. Alexandra Jimenex", specialty: "Family Medicine", isBest: true },
-    { name: "Dr. Nathaniel Oclinaria", specialty: "General Practitioner / Preventive Medicine", isBest: false },
+    { name: "Alexandra Jimenez", specialty: "Family Medicine", isBest: true },
+    { name: "Nathaniel Oclinaria", specialty: "General Practitioner / Preventive Medicine", isBest: false },
   ],
   "Follow-up visit": [
-    { name: "Dr. Alexandra Jimenex", specialty: "Family Medicine", isBest: true },
-    { name: "Dr. Aaron Bayten", specialty: "Internal Medicine", isBest: false },
-    { name: "Dr. Nathaniel Oclinaria", specialty: "General Practitioner / Preventive Medicine", isBest: false },
+    { name: "Alexandra Jimenez", specialty: "Family Medicine", isBest: true },
+    { name: "Aaron Bayten", specialty: "Internal Medicine", isBest: false },
+    { name: "Nathaniel Oclinaria", specialty: "General Practitioner / Preventive Medicine", isBest: false },
   ],
   "Eye examination": [
-    { name: "Dr. Angela Samboa", specialty: "Ophthalmologist", isBest: true },
-    { name: "Dr. Alexandra Jimenex", specialty: "Family Medicine", isBest: false },
+    { name: "Angela Samboa", specialty: "Ophthalmologist", isBest: true },
+    { name: "Alexandra Jimenez", specialty: "Family Medicine", isBest: false },
   ],
   "Skin consultation": [
-    { name: "Dr. Mark De Chavez", specialty: "Dermatologist", isBest: true },
-    { name: "Dr. Alexandra Jimenex", specialty: "Family Medicine", isBest: false },
+    { name: "Mark De Chavez", specialty: "Dermatologist", isBest: true },
+    { name: "Alexandra Jimenez", specialty: "Family Medicine", isBest: false },
   ],
   "Joint or bone pain": [
-    { name: "Dr. Hazama Kurooo", specialty: "Orthopedic Surgeon", isBest: true },
-    { name: "Dr. Aaron Bayten", specialty: "Internal Medicine", isBest: false },
+    { name: "Hazama Kurooo", specialty: "Orthopedic Surgeon", isBest: true },
+    { name: "Aaron Bayten", specialty: "Internal Medicine", isBest: false },
   ],
   "Women's health consultation": [
-    { name: "Dr. Carl Jacob Regencia", specialty: "Obstetrics & Gynecology", isBest: true },
-    { name: "Dr. Alexandra Jimenex", specialty: "Family Medicine", isBest: false },
+    { name: "Carl Jacob Regencia", specialty: "Obstetrics & Gynecology", isBest: true },
+    { name: "Alexandra Jimenez", specialty: "Family Medicine", isBest: false },
   ],
   "Men's health consultation": [
-    { name: "Dr. Aaron Bayten", specialty: "Internal Medicine", isBest: true },
-    { name: "Dr. Nathaniel Oclinaria", specialty: "General Practitioner / Preventive Medicine", isBest: false },
+    { name: "Aaron Bayten", specialty: "Internal Medicine", isBest: true },
+    { name: "Nathaniel Oclinaria", specialty: "General Practitioner / Preventive Medicine", isBest: false },
   ],
   "Child health consultation": [
-    { name: "Dr. Micaela Pimentel", specialty: "Pediatrician", isBest: true },
-    { name: "Dr. Alexandra Jimenex", specialty: "Family Medicine", isBest: false },
+    { name: "Micaela Pimentel", specialty: "Pediatrician", isBest: true },
+    { name: "Alexandra Jimenez", specialty: "Family Medicine", isBest: false },
   ],
   "Mental health consultation": [
-    { name: "Dr. Josh Allen Lee", specialty: "Psychiatrist", isBest: true },
-    { name: "Dr. Alexandra Jimenex", specialty: "Family Medicine", isBest: false },
+    { name: "Josh Allen Lee", specialty: "Psychiatrist", isBest: true },
+    { name: "Alexandra Jimenez", specialty: "Family Medicine", isBest: false },
   ],
   "Birth control consultation": [
-    { name: "Dr. Carl Jacob Regencia", specialty: "Obstetrics & Gynecology", isBest: true },
-    { name: "Dr. Alexandra Jimenex", specialty: "Family Medicine", isBest: false },
+    { name: "Carl Jacob Regencia", specialty: "Obstetrics & Gynecology", isBest: true },
+    { name: "Alexandra Jimenez", specialty: "Family Medicine", isBest: false },
   ],
   "Prescription renewal": [
-    { name: "Dr. Nathaniel Oclinaria", specialty: "General Practitioner / Preventive Medicine", isBest: true },
-    { name: "Dr. Alexandra Jimenex", specialty: "Family Medicine", isBest: false },
-    { name: "Dr. Aaron Bayten", specialty: "Internal Medicine", isBest: false },
+    { name: "Nathaniel Oclinaria", specialty: "General Practitioner / Preventive Medicine", isBest: true },
+    { name: "Alexandra Jimenez", specialty: "Family Medicine", isBest: false },
+    { name: "Aaron Bayten", specialty: "Internal Medicine", isBest: false },
   ],
   "Laboratory test request": [
-    { name: "Dr. Aaron Bayten", specialty: "Internal Medicine", isBest: true },
-    { name: "Dr. Nathaniel Oclinaria", specialty: "General Practitioner / Preventive Medicine", isBest: false },
+    { name: "Aaron Bayten", specialty: "Internal Medicine", isBest: true },
+    { name: "Nathaniel Oclinaria", specialty: "General Practitioner / Preventive Medicine", isBest: false },
   ],
   "Medical certificate / clearance": [
-    { name: "Dr. Nathaniel Oclinaria", specialty: "General Practitioner / Preventive Medicine", isBest: true },
-    { name: "Dr. Alexandra Jimenex", specialty: "Family Medicine", isBest: false },
+    { name: "Nathaniel Oclinaria", specialty: "General Practitioner / Preventive Medicine", isBest: true },
+    { name: "Alexandra Jimenez", specialty: "Family Medicine", isBest: false },
   ],
   "Travel health consultation": [
-    { name: "Dr. Nathaniel Oclinaria", specialty: "General Practitioner / Preventive Medicine", isBest: true },
-    { name: "Dr. Aaron Bayten", specialty: "Internal Medicine", isBest: false },
+    { name: "Nathaniel Oclinaria", specialty: "General Practitioner / Preventive Medicine", isBest: true },
+    { name: "Aaron Bayten", specialty: "Internal Medicine", isBest: false },
   ],
 };
 
@@ -136,34 +136,27 @@ export function AppointmentsPage({ patient }) {
   const getFilteredDoctors = () => {
     if (!selectedReason) return [];
 
-    const recommendedDoctorNames = APPOINTMENT_TYPE_DOCTORS[selectedReason] || [];
-    return doctors.filter((doctor) =>
-      recommendedDoctorNames.some(
-        (rec) => rec.name.toLowerCase() === doctor.name.toLowerCase()
-      )
-    );
+    const recommendedDoctorsForReason = APPOINTMENT_TYPE_DOCTORS[selectedReason] || [];
+    
+    // Filter and sort doctors according to the recommendation order
+    const filtered = recommendedDoctorsForReason
+      .map((rec) => {
+        // Find the doctor in the list that matches this recommendation
+        const doctor = doctors.find((d) =>
+          d.name.toLowerCase().includes(rec.name.toLowerCase()) ||
+          rec.name.toLowerCase().includes(d.name.toLowerCase())
+        );
+        return doctor ? { ...doctor, isBest: rec.isBest, recommendationOrder: recommendedDoctorsForReason.indexOf(rec) } : null;
+      })
+      .filter((d) => d !== null)
+      .sort((a, b) => a.recommendationOrder - b.recommendationOrder);
+
+    return filtered;
   };
 
   const handleSelectDoctor = (doctor) => {
-    setShowSpecialtyWarning(false);
-
-    // Check if specialty matches the appointment type
-    if (selectedReason) {
-      const recommendedDoctorsForReason = APPOINTMENT_TYPE_DOCTORS[selectedReason] || [];
-      const match = recommendedDoctorsForReason.find(
-        (rec) => rec.name.toLowerCase() === doctor.name.toLowerCase()
-      );
-
-      if (!match) {
-        // Doctor specialty doesn't match appointment type
-        setSpecialtyWarning(
-          `⚠️ Warning: ${doctor.name} specializes in "${doctor.specialty}", which may not be ideal for "${selectedReason}".`
-        );
-        setShowSpecialtyWarning(true);
-      }
-    }
-
     setSelectedDoctor(doctor);
+    setShowSpecialtyWarning(false);
   };
 
   const filteredDoctors = getFilteredDoctors();
@@ -335,17 +328,17 @@ export function AppointmentsPage({ patient }) {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {filteredDoctors.map((d) => {
                 const isSelected = selectedDoctor?.doctorID === d.doctorID;
-                const recommendedDoctorNames = APPOINTMENT_TYPE_DOCTORS[selectedReason] || [];
-                const isBest = recommendedDoctorNames.some(
-                  (rec) => rec.isBest && rec.name.toLowerCase() === d.name.toLowerCase()
-                );
+                const isBest = d.isBest;
+                
                 return (
                   <button
                     key={d.doctorID}
                     onClick={() => handleSelectDoctor(d)}
                     className={
                       "rounded-xl border bg-white p-4 shadow-soft text-left transition " +
-                      (isSelected ? "border-hf-blue bg-sky-50" : "border-slate-200 hover:bg-slate-50")
+                      (isSelected ? "border-hf-blue bg-sky-50" : 
+                       isBest ? "border-emerald-300 hover:bg-emerald-50" :
+                       "border-slate-200 hover:bg-slate-50")
                     }
                   >
                     <div className="flex items-start gap-3">
@@ -355,7 +348,7 @@ export function AppointmentsPage({ patient }) {
                       <div className="flex-1">
                         <div className="font-extrabold text-slate-900">{d.name}</div>
                         <div className="text-sm text-slate-500">{d.specialty}</div>
-                        {isBest && <div className="text-xs text-emerald-700 font-bold mt-1">✓ Best Match</div>}
+                        {isBest && <div className="text-xs text-emerald-700 font-bold mt-1">⭐ Best Match</div>}
                       </div>
                     </div>
 
