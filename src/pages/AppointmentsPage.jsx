@@ -15,77 +15,91 @@ const APPOINTMENT_TYPES = [
   "Follow-up visit",
   "Eye examination",
   "Skin consultation",
-  "Joint or bone pain",
+  "Ear, nose, or throat concern",
   "Women's health consultation",
   "Men's health consultation",
   "Child health consultation",
-  "Mental health consultation",
   "Birth control consultation",
   "Prescription renewal",
   "Laboratory test request",
   "Medical certificate / clearance",
   "Travel health consultation",
+  "Joint or bone pain",
 ];
 
 // Mapping of appointment types to recommended doctors (without Dr. prefix for DB matching)
 const APPOINTMENT_TYPE_DOCTORS = {
   "General check-up": [
     { name: "Alexandra Jimenez", specialty: "Family Medicine", isBest: true },
-    { name: "Nathaniel Oclinaria", specialty: "General Practitioner / Preventive Medicine", isBest: false },
+    { name: "Nathaniel Oclinaria", specialty: "Preventive Medicine", isBest: false },
+    { name: "Aaron Bayten", specialty: "Internal Medicine", isBest: false },
   ],
   "Follow-up visit": [
     { name: "Alexandra Jimenez", specialty: "Family Medicine", isBest: true },
     { name: "Aaron Bayten", specialty: "Internal Medicine", isBest: false },
-    { name: "Nathaniel Oclinaria", specialty: "General Practitioner / Preventive Medicine", isBest: false },
+    { name: "Nathaniel Oclinaria", specialty: "Preventive Medicine", isBest: false },
+    { name: "Mark De Chavez", specialty: "Dermatologist", isBest: false },
   ],
   "Eye examination": [
     { name: "Angela Samboa", specialty: "Ophthalmologist", isBest: true },
     { name: "Alexandra Jimenez", specialty: "Family Medicine", isBest: false },
+    { name: "Nathaniel Oclinaria", specialty: "Preventive Medicine", isBest: false },
   ],
   "Skin consultation": [
     { name: "Mark De Chavez", specialty: "Dermatologist", isBest: true },
     { name: "Alexandra Jimenez", specialty: "Family Medicine", isBest: false },
+    { name: "Nathaniel Oclinaria", specialty: "Preventive Medicine", isBest: false },
+  ],
+  "Ear, nose, or throat concern": [
+    { name: "Josh Allen Lee", specialty: "ENT Specialist", isBest: true },
+    { name: "Alexandra Jimenez", specialty: "Family Medicine", isBest: false },
+    { name: "Aaron Bayten", specialty: "Internal Medicine", isBest: false },
   ],
   "Joint or bone pain": [
-    { name: "Hazama Kurooo", specialty: "Orthopedic Surgeon", isBest: true },
-    { name: "Aaron Bayten", specialty: "Internal Medicine", isBest: false },
+    { name: "Aaron Bayten", specialty: "Internal Medicine", isBest: true },
+    { name: "Alexandra Jimenez", specialty: "Family Medicine", isBest: false },
+    { name: "Nathaniel Oclinaria", specialty: "Preventive Medicine", isBest: false },
   ],
   "Women's health consultation": [
     { name: "Carl Jacob Regencia", specialty: "Obstetrics & Gynecology", isBest: true },
     { name: "Alexandra Jimenez", specialty: "Family Medicine", isBest: false },
+    { name: "Nathaniel Oclinaria", specialty: "Preventive Medicine", isBest: false },
   ],
   "Men's health consultation": [
     { name: "Aaron Bayten", specialty: "Internal Medicine", isBest: true },
-    { name: "Nathaniel Oclinaria", specialty: "General Practitioner / Preventive Medicine", isBest: false },
+    { name: "Nathaniel Oclinaria", specialty: "Preventive Medicine", isBest: false },
+    { name: "Alexandra Jimenez", specialty: "Family Medicine", isBest: false },
   ],
   "Child health consultation": [
     { name: "Micaela Pimentel", specialty: "Pediatrician", isBest: true },
     { name: "Alexandra Jimenez", specialty: "Family Medicine", isBest: false },
-  ],
-  "Mental health consultation": [
-    { name: "Josh Allen Lee", specialty: "Psychiatrist", isBest: true },
-    { name: "Alexandra Jimenez", specialty: "Family Medicine", isBest: false },
+    { name: "Aaron Bayten", specialty: "Internal Medicine", isBest: false },
   ],
   "Birth control consultation": [
     { name: "Carl Jacob Regencia", specialty: "Obstetrics & Gynecology", isBest: true },
     { name: "Alexandra Jimenez", specialty: "Family Medicine", isBest: false },
+    { name: "Nathaniel Oclinaria", specialty: "Preventive Medicine", isBest: false },
   ],
   "Prescription renewal": [
-    { name: "Nathaniel Oclinaria", specialty: "General Practitioner / Preventive Medicine", isBest: true },
+    { name: "Nathaniel Oclinaria", specialty: "Preventive Medicine", isBest: true },
     { name: "Alexandra Jimenez", specialty: "Family Medicine", isBest: false },
     { name: "Aaron Bayten", specialty: "Internal Medicine", isBest: false },
+    { name: "Josh Allen Lee", specialty: "ENT Specialist", isBest: false },
   ],
   "Laboratory test request": [
     { name: "Aaron Bayten", specialty: "Internal Medicine", isBest: true },
-    { name: "Nathaniel Oclinaria", specialty: "General Practitioner / Preventive Medicine", isBest: false },
-  ],
-  "Medical certificate / clearance": [
-    { name: "Nathaniel Oclinaria", specialty: "General Practitioner / Preventive Medicine", isBest: true },
+    { name: "Nathaniel Oclinaria", specialty: "Preventive Medicine", isBest: false },
     { name: "Alexandra Jimenez", specialty: "Family Medicine", isBest: false },
   ],
-  "Travel health consultation": [
-    { name: "Nathaniel Oclinaria", specialty: "General Practitioner / Preventive Medicine", isBest: true },
+  "Medical certificate / clearance": [
+    { name: "Nathaniel Oclinaria", specialty: "Preventive Medicine", isBest: true },
+    { name: "Alexandra Jimenez", specialty: "Family Medicine", isBest: false },
     { name: "Aaron Bayten", specialty: "Internal Medicine", isBest: false },
+  ],
+  "Travel health consultation": [
+    { name: "Nathaniel Oclinaria", specialty: "Preventive Medicine", isBest: true },
+    { name: "Aaron Bayten", specialty: "Internal Medicine", isBest: false },
+    { name: "Alexandra Jimenez", specialty: "Family Medicine", isBest: false },
   ],
 };
 
