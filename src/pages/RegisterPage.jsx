@@ -15,6 +15,7 @@ function validatePassword(pw) {
 export default function RegisterPage({ onRegister, onGoLogin }) {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
+  const [contactNumber, setContactNumber] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState("");
@@ -28,10 +29,11 @@ export default function RegisterPage({ onRegister, onGoLogin }) {
 
     if (!fullName.trim()) return setError("Please enter your full name.");
     if (!email.trim()) return setError("Please enter your email.");
+    if (!contactNumber.trim()) return setError("Please enter your contact number.");
     if (!allRulesOk) return setError("Password does not meet the requirements.");
     if (password !== confirm) return setError("Passwords do not match.");
 
-    const res = onRegister({ fullName, email, password });
+    const res = onRegister({ fullName, email, contactNumber, password });
     if (!res?.ok) setError(res?.message || "Registration failed.");
   };
 
@@ -60,6 +62,16 @@ export default function RegisterPage({ onRegister, onGoLogin }) {
           className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-hf-blue/40 focus:border-hf-blue"
           type="email"
           placeholder="you@email.com"
+          required
+        />
+
+        <label className="mt-4 block text-xs font-semibold text-slate-700">Contact Number</label>
+        <input
+          value={contactNumber}
+          onChange={(e) => setContactNumber(e.target.value)}
+          className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-hf-blue/40 focus:border-hf-blue"
+          type="tel"
+          placeholder="e.g., +1 (555) 123-4567"
           required
         />
 

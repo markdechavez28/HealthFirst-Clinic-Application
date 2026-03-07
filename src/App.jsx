@@ -102,7 +102,7 @@ function PatientRoutes() {
     return { ok: true };
   };
 
-  const onRegister = async ({ fullName, email, password }) => {
+  const onRegister = async ({ fullName, email, contactNumber, password }) => {
     const { data, error } = await supabase.auth.signUp({ email, password });
     if (error) return { ok: false, message: error.message };
     const userId = data.user?.id;
@@ -111,6 +111,7 @@ function PatientRoutes() {
         patientID: userId,
         name: fullName,
         email,
+        contact_num: contactNumber,
       });
       if (err2) return { ok: false, message: err2.message };
       // Create mock appointment history to seed recommendations
