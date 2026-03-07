@@ -5,11 +5,14 @@ export default function LoginPage({ onLogin, onGoRegister }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const submit = (e) => {
+  const submit = async (e) => {
     e.preventDefault();
     setError("");
-    const res = onLogin({ email, password });
+    setLoading(true);
+    const res = await onLogin({ email, password });
+    setLoading(false);
     if (!res?.ok) setError(res?.message || "Login failed.");
   };
 
@@ -68,9 +71,10 @@ export default function LoginPage({ onLogin, onGoRegister }) {
 
         <button
           type="submit"
-          className="mt-5 w-full rounded-lg bg-hf-blue px-4 py-2.5 text-sm font-semibold text-white shadow-card hover:bg-hf-blueDark active:translate-y-[1px]"
+          disabled={loading}
+          className="mt-5 w-full rounded-lg bg-hf-blue px-4 py-2.5 text-sm font-semibold text-white shadow-card hover:bg-hf-blueDark active:translate-y-[1px] disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          Continue
+          {loading ? "Logging in..." : "Continue"}
         </button>
 
         <div className="my-3 flex items-center gap-3 text-xs text-slate-500">
