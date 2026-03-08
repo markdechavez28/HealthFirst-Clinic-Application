@@ -1,4 +1,5 @@
 import React from "react";
+import { useNavigate } from "react-router-dom";
 import HealthFirstLogo from "./HealthFirstLogo.jsx";
 import { Icon } from "./Icon.jsx";
 
@@ -10,6 +11,8 @@ const NAV = [
 ];
 
 export default function DashboardLayout({ patient, active, onLogout, children }) {
+  const navigate = useNavigate();
+
   return (
     <div className="min-h-screen bg-slate-100">
       <div className="mx-auto max-w-6xl px-4 py-6">
@@ -33,10 +36,11 @@ export default function DashboardLayout({ patient, active, onLogout, children })
                       <button
                         key={item.key}
                         onClick={() =>
-                          (window.location.hash =
+                          navigate(
                             item.key === "dashboard"
-                              ? "/dashboard"
-                              : `/dashboard/${item.key}`)
+                              ? "/patient/dashboard"
+                              : `/patient/dashboard/${item.key}`
+                          )
                         }
                         className={
                           "w-full flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-semibold " +
