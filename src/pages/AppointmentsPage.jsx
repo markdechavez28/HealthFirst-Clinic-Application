@@ -27,7 +27,6 @@ const APPOINTMENT_TYPES = [
   "Joint or bone pain",
 ];
 
-// Mapping of appointment types to recommended doctors (without Dr. prefix for DB matching)
 const APPOINTMENT_TYPE_DOCTORS = {
   "General check-up": [
     { name: "Alexandra Jimenez", specialty: "Family Medicine", isBest: true },
@@ -122,7 +121,6 @@ export function AppointmentsPage({ patient }) {
   }, []);
 
   useEffect(() => {
-    // Only fetch recommendations when an appointment type is selected
     if (!selectedReason || !patient?.patientID) {
       setRecommendedDoctors([]);
       return;
@@ -146,16 +144,13 @@ export function AppointmentsPage({ patient }) {
     loadRecommendations();
   }, [selectedReason, patient]);
 
-  // Get filtered doctors based on appointment type
   const getFilteredDoctors = () => {
     if (!selectedReason) return [];
 
     const recommendedDoctorsForReason = APPOINTMENT_TYPE_DOCTORS[selectedReason] || [];
     
-    // Filter and sort doctors according to the recommendation order
     const filtered = recommendedDoctorsForReason
       .map((rec) => {
-        // Find the doctor in the list that matches this recommendation
         const doctor = doctors.find((d) =>
           d.name.toLowerCase().includes(rec.name.toLowerCase()) ||
           rec.name.toLowerCase().includes(d.name.toLowerCase())
@@ -186,7 +181,6 @@ export function AppointmentsPage({ patient }) {
       return;
     }
     try {
-      // normalize date keywords using local date (not UTC)
       const localIso = (d) => {
         const t = new Date(d);
         const y = t.getFullYear();
@@ -202,7 +196,6 @@ export function AppointmentsPage({ patient }) {
         t.setDate(t.getDate() + 1);
         apptDate = localIso(t);
       }
-      // otherwise user-selected string is used verbatim
       await createAppointment({
         patientID: patient.patientID,
         doctorID: selectedDoctor.doctorID,
@@ -210,7 +203,6 @@ export function AppointmentsPage({ patient }) {
         time_slot: selectedTime,
         status: "pending",
       });
-      // reset form
       setStep(1);
       setSelectedReason(null);
       setSelectedDoctor(null);
@@ -225,26 +217,23 @@ export function AppointmentsPage({ patient }) {
 
   return (
     <div className="p-6">
-      {/* Page header (Title + Search) */}
-        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <h1 className="text-3xl font-extrabold text-hf-blue">Appointments</h1>
-
-          <div className="relative w-full sm:w-[360px]">
-            <input
-              className="w-full rounded-full border border-slate-200 bg-slate-100 px-4 py-2.5 pr-10 text-sm outline-none focus:ring-2 focus:ring-hf-blue/30 focus:border-hf-blue"
-              placeholder="Search"
-            />
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500">
-              <Icon name="search" className="w-5 h-5" />
-            </span>
-          </div>
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <h1 className="text-3xl font-extrabold text-hf-blue">Appointments</h1>
+        <div className="relative w-full sm:w-[360px]">
+          <input
+            className="w-full rounded-full border border-slate-200 bg-slate-100 px-4 py-2.5 pr-10 text-sm outline-none focus:ring-2 focus:ring-hf-blue/30 focus:border-hf-blue"
+            placeholder="Search"
+          />
+          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500">
+            <Icon name="search" className="w-5 h-5" />
+          </span>
         </div>
+      </div>
         
-      {/* Progress */}
       <div className="mb-6">
         <div className="flex items-center justify-between text-xs font-semibold text-slate-400">
-          <span className={step >= 1 ? "text-hf-blue" : ""}>Choose a Practitioner</span>
-          <span className={step >= 2 ? "text-hf-blue" : ""}>Choose a Time</span>
+          <span className={step >= 1 ? "text-hf-blue" : ""}>Choose a Time</span>
+          <span className={step >= 2 ? "text-hf-blue" : ""}>Choose a Practitioner</span>
           <span className={step >= 3 ? "text-hf-blue" : ""}>Your Details</span>
           <span className={step >= 4 ? "text-hf-blue" : ""}>Confirm Booking</span>
         </div>
@@ -254,159 +243,163 @@ export function AppointmentsPage({ patient }) {
       </div>
 
       {step === 1 && (
-        <div className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Reasons */}
-            <div>
-            <h2 className="text-xl font-extrabold text-slate-900">
-              What’s your reason for visit?
-            </h2>
-            <p className="text-sm text-slate-500 mb-4">Choose an appointment type</p>
-
-            <div className="grid grid-cols-2 gap-3">
-              {APPOINTMENT_TYPES.map((r) => (
-                <button
-                  key={r}
-                  onClick={() => {
-                    setSelectedReason(r);
-                    setSelectedDoctor(null);
-                    setShowSpecialtyWarning(false);
-                  }}
-                  className={
-                    "rounded-lg px-3 py-2 text-sm font-semibold transition " +
-                    (selectedReason === r
-                      ? "bg-hf-blue text-white"
-                      : "bg-sky-100 text-slate-800 hover:bg-sky-200")
-                  }
-                >
-                  {r}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Doctors - Only show after appointment type is selected */}
-          {selectedReason && (
-          <div>
-            <h2 className="text-xl font-extrabold text-slate-900">
-              Practitioners Available
-            </h2>
-            <p className="text-sm text-slate-500 mb-4">Choose a practitioner</p>
-
-            {/* Specialty Warning Popup */}
-            {showSpecialtyWarning && (
-              <div className="mb-4 rounded-lg border border-yellow-300 bg-yellow-50 p-4">
-                <div className="flex items-start gap-3">
-                  <span className="text-lg">⚠️</span>
-                  <div>
-                    <p className="text-sm font-semibold text-yellow-900">{specialtyWarning}</p>
-                    <p className="text-xs text-yellow-800 mt-1">
-                      You can continue, but this specialist may not be the best match for your needs.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Recommendations - Only show after appointment type is selected */}
-            {loadingRecs && (
-              <div className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-sky-50 rounded-lg border border-blue-100">
-                <div className="flex items-center gap-2">
-                  <div className="animate-spin h-4 w-4 rounded-full border-2 border-hf-blue border-t-transparent"></div>
-                  <span className="text-sm font-semibold text-slate-700">Computing recommendations...</span>
-                </div>
-              </div>
-            )}
-            {!loadingRecs && recommendedDoctors.length > 0 && (
-              <div className="mb-6">
-                <RecommendedDoctors
-                  doctors={recommendedDoctors}
-                  onSelectDoctor={(doctor) => {
-                    handleSelectDoctor(doctor);
-                  }}
-                  compact={true}
-                />
-              </div>
-            )}
-
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {filteredDoctors.map((d) => {
-                const isSelected = selectedDoctor?.doctorID === d.doctorID;
-                const isBest = d.isBest;
-                
-                return (
-                  <button
-                    key={d.doctorID}
-                    onClick={() => handleSelectDoctor(d)}
-                    className={
-                      "rounded-xl border bg-white p-4 shadow-soft text-left transition " +
-                      (isSelected ? "border-hf-blue bg-sky-50" : 
-                       isBest ? "border-emerald-300 hover:bg-emerald-50" :
-                       "border-slate-200 hover:bg-slate-50")
-                    }
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className="h-12 w-12 rounded-full bg-slate-200 flex items-center justify-center">
-                        <Icon name="doctor" className="w-6 h-6 text-slate-600" />
-                      </div>
-                      <div className="flex-1">
-                        <div className="font-extrabold text-slate-900">{d.name}</div>
-                        <div className="text-sm text-slate-500">{d.specialty}</div>
-                        {isBest && <div className="text-xs text-emerald-700 font-bold mt-1">Best Match</div>}
-                      </div>
-                    </div>
-
-                    <div className="mt-4 flex items-center justify-between">
-                      <span
-                        className={
-                          "text-xs font-bold px-3 py-1 rounded-full " +
-                          (d.available && d.available.includes("Today")
-                            ? "bg-emerald-100 text-emerald-700"
-                            : "bg-slate-100 text-slate-500")
-                        }
-                      >
-                        {d.available || ""}
-                      </span>
-                      <div className="flex gap-2 text-slate-400">
-                        <Icon name="video" className="w-4 h-4" />
-                        <Icon name="phone" className="w-4 h-4" />
-                      </div>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-
-            <button
-              disabled={!selectedReason || !selectedDoctor}
-              onClick={() => setStep(2)}
-              className="mt-5 w-full rounded-lg bg-hf-blue py-3 font-bold text-white disabled:opacity-40"
-            >
-              Continue →
-            </button>
-
-            {!selectedReason || !selectedDoctor ? (
-              <div className="mt-2 text-xs text-slate-500">
-                Select an appointment type and a practitioner to continue.
-              </div>
-            ) : null}
-          </div>
-          )}
-        </div>
-        </div>
-      )}
-
-      {step === 2 && (
         <ChooseTime
-          onBack={() => setStep(1)}
-          onNext={() => setStep(3)}
+          onBack={() => setStep(0)}
+          onNext={() => setStep(2)}
           selectedDate={selectedDate}
           setSelectedDate={setSelectedDate}
           selectedTime={selectedTime}
           setSelectedTime={setSelectedTime}
         />
       )}
+
+      {step === 2 && (
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div>
+              <h2 className="text-xl font-extrabold text-slate-900">
+                What's your reason for visit?
+              </h2>
+              <p className="text-sm text-slate-500 mb-4">Choose an appointment type</p>
+
+              <div className="grid grid-cols-2 gap-3">
+                {APPOINTMENT_TYPES.map((r) => (
+                  <button
+                    key={r}
+                    onClick={() => {
+                      setSelectedReason(r);
+                      setSelectedDoctor(null);
+                      setShowSpecialtyWarning(false);
+                    }}
+                    className={
+                      "rounded-lg px-3 py-2 text-sm font-semibold transition " +
+                      (selectedReason === r
+                        ? "bg-hf-blue text-white"
+                        : "bg-sky-100 text-slate-800 hover:bg-sky-200")
+                    }
+                  >
+                    {r}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {selectedReason && (
+              <div>
+                <h2 className="text-xl font-extrabold text-slate-900">
+                  Practitioners Available
+                </h2>
+                <p className="text-sm text-slate-500 mb-4">Choose a practitioner</p>
+
+                {showSpecialtyWarning && (
+                  <div className="mb-4 rounded-lg border border-yellow-300 bg-yellow-50 p-4">
+                    <div className="flex items-start gap-3">
+                      <span className="text-lg">⚠️</span>
+                      <div>
+                        <p className="text-sm font-semibold text-yellow-900">{specialtyWarning}</p>
+                        <p className="text-xs text-yellow-800 mt-1">
+                          You can continue, but this specialist may not be the best match for your needs.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {loadingRecs && (
+                  <div className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-sky-50 rounded-lg border border-blue-100">
+                    <div className="flex items-center gap-2">
+                      <div className="animate-spin h-4 w-4 rounded-full border-2 border-hf-blue border-t-transparent"></div>
+                      <span className="text-sm font-semibold text-slate-700">Computing recommendations...</span>
+                    </div>
+                  </div>
+                )}
+                {!loadingRecs && recommendedDoctors.length > 0 && (
+                  <div className="mb-6">
+                    <RecommendedDoctors
+                      doctors={recommendedDoctors}
+                      onSelectDoctor={(doctor) => {
+                        handleSelectDoctor(doctor);
+                      }}
+                      compact={true}
+                    />
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {filteredDoctors.map((d) => {
+                    const isSelected = selectedDoctor?.doctorID === d.doctorID;
+                    const isBest = d.isBest;
+                    
+                    return (
+                      <button
+                        key={d.doctorID}
+                        onClick={() => handleSelectDoctor(d)}
+                        className={
+                          "rounded-xl border bg-white p-4 shadow-soft text-left transition " +
+                          (isSelected ? "border-hf-blue bg-sky-50" : 
+                           isBest ? "border-emerald-300 hover:bg-emerald-50" :
+                           "border-slate-200 hover:bg-slate-50")
+                        }
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className="h-12 w-12 rounded-full bg-slate-200 flex items-center justify-center">
+                            <Icon name="doctor" className="w-6 h-6 text-slate-600" />
+                          </div>
+                          <div className="flex-1">
+                            <div className="font-extrabold text-slate-900">{d.name}</div>
+                            <div className="text-sm text-slate-500">{d.specialty}</div>
+                            {isBest && <div className="text-xs text-emerald-700 font-bold mt-1">Best Match</div>}
+                          </div>
+                        </div>
+
+                        <div className="mt-4 flex items-center justify-between">
+                          <span
+                            className={
+                              "text-xs font-bold px-3 py-1 rounded-full " +
+                              (d.available && d.available.includes("Today")
+                                ? "bg-emerald-100 text-emerald-700"
+                                : "bg-slate-100 text-slate-500")
+                            }
+                          >
+                            {d.available || ""}
+                          </span>
+                          <div className="flex gap-2 text-slate-400">
+                            <Icon name="video" className="w-4 h-4" />
+                            <Icon name="phone" className="w-4 h-4" />
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="mt-6 flex gap-3">
+                  <button
+                    onClick={() => setStep(1)}
+                    className="flex-1 rounded-lg border-2 border-slate-300 hover:border-slate-400 py-3 font-bold text-slate-700"
+                  >
+                    ← Back
+                  </button>
+                  <button
+                    disabled={!selectedReason || !selectedDoctor}
+                    onClick={() => setStep(3)}
+                    className="flex-1 rounded-lg bg-hf-blue py-3 font-bold text-white disabled:opacity-40"
+                  >
+                    Continue →
+                  </button>
+                </div>
+
+                {!selectedReason || !selectedDoctor ? (
+                  <div className="mt-2 text-xs text-slate-500">
+                    Select an appointment type and a practitioner to continue.
+                  </div>
+                ) : null}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {step === 3 && (
         <YourDetails
           onBack={() => setStep(2)}
@@ -415,6 +408,7 @@ export function AppointmentsPage({ patient }) {
           setDetails={setDetails}
         />
       )}
+
       {step === 4 && (
         <ConfirmBooking
           onBack={() => setStep(3)}
@@ -427,6 +421,7 @@ export function AppointmentsPage({ patient }) {
           }}
         />
       )}
+
       {error && (
         <div className="mt-4 text-sm text-red-600">{error}</div>
       )}

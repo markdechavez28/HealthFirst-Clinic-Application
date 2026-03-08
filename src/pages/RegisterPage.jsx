@@ -114,7 +114,7 @@ export default function RegisterPage({ onRegister, onGoLogin }) {
           onChange={(e) => setFirstName(e.target.value)}
           className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-hf-blue/40 focus:border-hf-blue"
           type="text"
-          placeholder="e.g., Sarah"
+          placeholder="e.g., Juan"
           required
         />
 
@@ -124,7 +124,7 @@ export default function RegisterPage({ onRegister, onGoLogin }) {
           onChange={(e) => setMiddleName(e.target.value)}
           className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-hf-blue/40 focus:border-hf-blue"
           type="text"
-          placeholder="e.g., Anne"
+          placeholder="e.g., Santos"
         />
 
         <label className="mt-4 block text-xs font-semibold text-slate-700">Surname</label>
@@ -133,7 +133,7 @@ export default function RegisterPage({ onRegister, onGoLogin }) {
           onChange={(e) => setSurname(e.target.value)}
           className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-hf-blue/40 focus:border-hf-blue"
           type="text"
-          placeholder="e.g., Miller"
+          placeholder="e.g., Dela Cruz"
           required
         />
 
