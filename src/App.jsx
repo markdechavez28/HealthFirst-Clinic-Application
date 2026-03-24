@@ -18,7 +18,9 @@ import DoctorMySched from "./pages/DoctorMySched";
 
 // Admin pages
 import AdminLogin from "./pages/AdminLogin.jsx";
+import AdminDashboard from "./pages/AdminDashboard.jsx";
 import ManageUser from "./pages/ManageUser.jsx";
+import AdminAppointments from "./pages/AdminAppointments.jsx";
 
 // Home page
 import HomePage from "./pages/HomePage.jsx";
@@ -212,9 +214,16 @@ function AdminRoutes() {
 
   useEffect(() => {
     if (session.isAuthed && location.pathname === "/admin/login") {
-      navigate("/admin/manage", { replace: true });
+      navigate("/admin/dashboard", { replace: true });
     }
-    if (!session.isAuthed && location.pathname.startsWith("/admin/manage")) {
+    if (
+      !session.isAuthed &&
+      (
+        location.pathname.startsWith("/admin/manage") ||
+        location.pathname.startsWith("/admin/dashboard") ||
+        location.pathname.startsWith("/admin/appointments")
+      )
+    ) {
       navigate("/admin/login", { replace: true });
     }
   }, [location.pathname, session, navigate]);
@@ -227,7 +236,7 @@ function AdminRoutes() {
       setSession(next);
       setLS(LS_KEYS.adminSession, next);
       setLS(LS_KEYS.admin, { email, password, role: "admin" });
-      navigate("/admin/manage");
+      navigate("/admin/dashboard");
       return { ok: true };
     }
     
@@ -237,7 +246,7 @@ function AdminRoutes() {
       const next = { isAuthed: true };
       setSession(next);
       setLS(LS_KEYS.adminSession, next);
-      navigate("/admin/manage");
+      navigate("/admin/dashboard");
       return { ok: true };
     }
     
@@ -253,7 +262,10 @@ function AdminRoutes() {
   return (
     <Routes>
       <Route path="login" element={<AdminLogin onLogin={onLogin} />} />
-      <Route path="manage" element={<ManageUser onLogout={onLogout} />} />
+      <Route path="dashboard" element={<AdminDashboard onLogout={onLogout} />} />
+      <Route path="manage-user-account" element={<ManageUser onLogout={onLogout} />} />
+      <Route path="appointments" element={<AdminAppointments onLogout={onLogout} />} />
+      <Route path="manage" element={<Navigate to="/admin/manage-user-account" replace />} />
       <Route path="" element={<Navigate to="/admin/login" replace />} />
     </Routes>
   );
