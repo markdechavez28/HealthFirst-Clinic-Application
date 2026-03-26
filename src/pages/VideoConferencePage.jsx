@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Icon } from "../components/Icon.jsx";
-import { supabase } from "../lib/supabase";
+import { supabase } from "../utils/supabaseClient";
 import { JitsiMeeting } from "@jitsi/react-sdk";
 
 export function VideoConferencePage({ patient }) {

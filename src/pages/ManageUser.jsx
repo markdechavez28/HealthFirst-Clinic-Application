@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { userService, appointmentService } from "../utils/supabaseClient";
+import { supabase, userService, appointmentService } from "../utils/supabaseClient";
 import { X, Plus, Edit2, Trash2, Search, Loader } from "lucide-react";
 
 const ManageUser = ({ onLogout }) => {
@@ -206,34 +206,66 @@ const ManageUser = ({ onLogout }) => {
     return Object.keys(errors).length === 0;
   };
 
+  // Generate a temporary password for new users
+  const generateTemporaryPassword = () => {
+    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()";
+    let password = "";
+    for (let i = 0; i < 10; i += 1) {
+      password += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return password;
+  };
+
   // Handle add/edit user based on type
   const handleSaveUser = async () => {
     if (!validateForm()) return;
 
     try {
-      if (userType === "patient") {
-        if (modalMode === "add") {
+      if (modalMode === "add") {
+        const tempPassword = generateTemporaryPassword();
+
+        const { data: authData, error: authError } = await supabase.auth.signUp({
+          email: formData.email,
+          password: tempPassword,
+        });
+
+        if (authError) {
+          throw authError;
+        }
+
+        const newUserId = authData?.user?.id;
+        if (!newUserId) {
+          throw new Error("Supabase auth did not return a user ID for new user.");
+        }
+
+        if (userType === "patient") {
           await userService.createUser({
             ...formData,
-            patientID: crypto.randomUUID(),
+            patientID: newUserId,
           });
         } else {
-          await userService.updateUser(selectedUser.patientID, formData);
-        }
-      } else {
-        // Doctor
-        if (modalMode === "add") {
           await userService.createDoctor({
             ...formData,
+            doctorID: newUserId,
           });
-        } else {
-          await userService.updateDoctor(selectedUser.doctorID, formData);
         }
+
+        loadUsers();
+        closeUserModal();
+        alert(`${userType === "patient" ? "Patient" : "Doctor"} created successfully. Temporary password: ${tempPassword}`);
+        return;
+      }
+
+      // Edit existing user (profile only, no auth credential change)
+      if (userType === "patient") {
+        await userService.updateUser(selectedUser.patientID, formData);
+      } else {
+        await userService.updateDoctor(selectedUser.doctorID, formData);
       }
 
       loadUsers();
       closeUserModal();
-      alert(`${userType === "patient" ? "Patient" : "Doctor"} ${modalMode === "add" ? "created" : "updated"} successfully!`);
+      alert(`${userType === "patient" ? "Patient" : "Doctor"} updated successfully!`);
     } catch (error) {
       console.error("Error saving user:", error);
       alert("Failed to save user. Check console for details.");

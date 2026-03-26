@@ -12,9 +12,6 @@ const NAV = [
 
 export default function DashboardLayout({ patient, active, onLogout, children }) {
   const navigate = useNavigate();
-<<<<<<< HEAD
-  
-=======
 
   const handleNavigation = (key) => {
     if (key === "dashboard") {
@@ -24,7 +21,6 @@ export default function DashboardLayout({ patient, active, onLogout, children })
     }
   };
 
->>>>>>> e56b792 (feat: admin dashboard user management; appointment filtering)
   return (
     <div className="min-h-screen bg-slate-100">
       <div className="mx-auto max-w-6xl px-4 py-6">
@@ -47,17 +43,7 @@ export default function DashboardLayout({ patient, active, onLogout, children })
                     return (
                       <button
                         key={item.key}
-<<<<<<< HEAD
-                        onClick={() =>
-                          navigate(
-                            item.key === "dashboard"
-                              ? "/patient/dashboard"
-                              : `/patient/dashboard/${item.key}`
-                          )
-                        }
-=======
                         onClick={() => handleNavigation(item.key)}
->>>>>>> e56b792 (feat: admin dashboard user management; appointment filtering)
                         className={
                           "w-full flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-semibold " +
                           (isActive ? "bg-sky-200/70" : "hover:bg-sky-100/60")

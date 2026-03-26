@@ -122,6 +122,7 @@ export const userService = {
       .from("Doctor")
       .insert([
         {
+          doctorID: doctorData.doctorID || undefined,
           name: doctorData.name,
           email: doctorData.email,
           specialty: doctorData.specialty,
