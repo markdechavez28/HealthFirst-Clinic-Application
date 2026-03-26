@@ -95,6 +95,9 @@ export default function DoctorDashboard({ doctor, onLogout }) {
         <div className="flex flex-col items-center mb-8">
           <img src="/doctor.jpg" alt="Doctor" className="w-20 h-20 rounded-full border-2 border-lightgreen" />
           <h2 className="text-xl mt-3 font-semibold">Dr. {doctor?.name || "Unknown"}</h2>
+          {doctor?.doctorID && (
+            <p className="text-xs text-gray-500 text-center">ID: {doctor.doctorID}</p>
+          )}
           <p className="text-sm text-txtblue">{doctor?.specialty || ""}</p>
         </div>
 

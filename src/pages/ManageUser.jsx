@@ -223,6 +223,7 @@ const ManageUser = ({ onLogout }) => {
     try {
       if (modalMode === "add") {
         const tempPassword = generateTemporaryPassword();
+        console.log("Creating auth user for email:", formData.email);
 
         const { data: authData, error: authError } = await supabase.auth.signUp({
           email: formData.email,
@@ -230,20 +231,24 @@ const ManageUser = ({ onLogout }) => {
         });
 
         if (authError) {
+          console.error("Auth error:", authError);
           throw authError;
         }
 
         const newUserId = authData?.user?.id;
+        console.log("New auth user ID:", newUserId);
         if (!newUserId) {
           throw new Error("Supabase auth did not return a user ID for new user.");
         }
 
         if (userType === "patient") {
+          console.log("Creating patient profile with ID:", newUserId);
           await userService.createUser({
             ...formData,
             patientID: newUserId,
           });
         } else {
+          console.log("Creating doctor profile with ID:", newUserId);
           await userService.createDoctor({
             ...formData,
             doctorID: newUserId,

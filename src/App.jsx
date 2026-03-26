@@ -73,12 +73,19 @@ function PatientRoutes() {
   useEffect(() => {
     const loadProfile = async () => {
       if (session?.user) {
+        console.log("Loading patient profile for user ID:", session.user.id);
         const { data, error } = await supabase
           .from("Patient")
           .select("*")
           .eq("patientID", session.user.id)
           .single();
-        if (!error) setPatient(data || {});
+        if (error) {
+          console.error("Error loading patient profile:", error);
+          setPatient({});
+        } else {
+          console.log("Patient profile loaded:", data);
+          setPatient(data || {});
+        }
       } else {
         setPatient({});
       }
@@ -159,12 +166,19 @@ function DoctorRoutes() {
   useEffect(() => {
     const loadProfile = async () => {
       if (session?.user) {
+        console.log("Loading doctor profile for user ID:", session.user.id);
         const { data, error } = await supabase
           .from("Doctor")
           .select("*")
           .eq("doctorID", session.user.id)
           .single();
-        if (!error) setDoctor(data || {});
+        if (error) {
+          console.error("Error loading doctor profile:", error);
+          setDoctor({});
+        } else {
+          console.log("Doctor profile loaded:", data);
+          setDoctor(data || {});
+        }
       } else {
         setDoctor({});
       }

@@ -34,7 +34,7 @@ export default function DashboardLayout({ patient, active, onLogout, children })
                     {patient?.name?.[0] || "P"}
                   </div>
                   <div className="mt-3 font-bold">{patient?.name || "Patient"}</div>
-                  <div className="text-sm text-hf-blue">ID: {patient?.id || "-"}</div>
+                  <div className="text-sm text-hf-blue">ID: {patient?.patientID || "-"}</div>
                 </div>
 
                 <nav className="mt-6 space-y-1">
