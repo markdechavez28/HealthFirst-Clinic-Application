@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
-import { supabase } from "./lib/supabase";
+import { supabase } from "./utils/supabaseClient.js";
 import { createMockAppointmentHistory } from "./services/patientService";
 
 // Patient pages

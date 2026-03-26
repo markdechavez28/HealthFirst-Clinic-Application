@@ -6,11 +6,14 @@ create table public."Appointment" (
   time_slot time without time zone not null,
   status character varying not null default 'pending'::character varying,
   created_at timestamp without time zone null default now(),
+  zoom_link text null,
+  rating integer null,
   constraint Appointment_pkey primary key ("appointmentID"),
   constraint Appointment_doctorID_appointment_date_time_slot_key unique ("doctorID", appointment_date, time_slot),
   constraint Appointment_doctorID_fkey foreign KEY ("doctorID") references "Doctor" ("doctorID") on delete CASCADE,
   constraint Appointment_patientID_fkey foreign KEY ("patientID") references "Patient" ("patientID") on delete CASCADE
 ) TABLESPACE pg_default;
+
 
 create table public."Doctor" (
   "doctorID" uuid not null default gen_random_uuid (),

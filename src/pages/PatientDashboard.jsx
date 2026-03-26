@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useEffect } from "react";
 import { Icon } from "../components/Icon.jsx";
-import { supabase } from "../lib/supabase";
 import { useNavigate } from "react-router-dom";
+import { supabase } from "../utils/supabaseClient";
 import { getUpcomingAppointment } from "../services/patientService";
 
 function Badge({ children }) {

@@ -1,4 +1,4 @@
-import { supabase } from "../lib/supabase";
+import { supabase } from "../utils/supabaseClient";
 
 // Profile
 export async function getPatientProfile(patientID) {

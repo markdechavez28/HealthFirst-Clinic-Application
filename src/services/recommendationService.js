@@ -1,4 +1,4 @@
-import { supabase } from "../lib/supabase";
+import { supabase } from "../utils/supabaseClient";
 import { getTopRecommendedDoctors } from "../utils/recommendationEngine";
 
 // Import appointment type to specialty mapping (without Dr. prefix for DB matching)
@@ -186,4 +186,3 @@ export async function getRecommendedDoctorsForPatient(patientID, appointmentType
     return [];
   }
 }
-

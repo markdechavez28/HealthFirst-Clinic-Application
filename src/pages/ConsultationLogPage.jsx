@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Icon } from "../components/Icon.jsx";
-import { supabase } from "../lib/supabase";
+import { supabase } from "../utils/supabaseClient";
 
 export function ConsultationLogPage({ patient }) {
   const [selected, setSelected] = useState(null);
