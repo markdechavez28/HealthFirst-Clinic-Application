@@ -5,3 +5,49 @@
 /* Optional: smoother rendering */
 :root { color-scheme: light; }
 * { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+
+/* COLORS */
+:root {
+  --blue: #004AAD;
+  --light-blue: #A1C6EA;
+  --dark-blue: #3E68A3;
+  --nav-blue: #E0E9F6;
+  --gray: #6E6B6B;
+  --light-green: #8FB78F;
+  --white: #ffffff;
+}
+
+/* TEXT COLORS */
+.text-txtblue {
+  color: var(--blue);
+}
+.text-txtgray {
+  color: var(--gray);
+}
+
+/* BACKGROUND COLORS */
+.bg-bglightblue {
+  background-color: var(--light-blue);
+}
+.bg-bgdarkblue {
+  background-color: var(--dark-blue);
+}
+.bg-navblue {
+  background-color: var(--nav-blue);
+}
+.lightgreen {
+  background-color: var(--light-green);
+}
+
+/* BORDER COLORS */
+.border-lightgreen {
+  border-color: var(--light-green);
+}
+
+/* FONT */
+.font-hammersmith {
+  font-family: 'Hammersmith One', sans-serif;
+}
+.font-abhaya {
+  font-family: 'Abhaya Libre', serif;
+}

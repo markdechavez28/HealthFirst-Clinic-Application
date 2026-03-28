@@ -238,12 +238,25 @@ export default function DoctorDashboard({ onLogout }) {
 /* FUNCTIONS */
 function NavItem({ icon, text, to, onClick }) {
   const navigate = useNavigate()
+
   const handleClick = () => {
     if (onClick) onClick()
     if (to) navigate(to)
   }
+
   return (
-    <button onClick={handleClick} className="flex items-center gap-3 px-4 py-2 rounded-lg text-sm text-black hover:bg-bgdarkblue hover:text-white transition">
+    <button
+      onClick={handleClick}
+      className="flex items-center gap-3 px-4 py-2 rounded-lg text-sm text-black transition duration-200"
+      onMouseEnter={(e) => {
+        e.currentTarget.style.backgroundColor = "var(--dark-blue)"
+        e.currentTarget.style.color = "white"
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.backgroundColor = "transparent"
+        e.currentTarget.style.color = "black"
+      }}
+    >
       {icon}
       <span>{text}</span>
     </button>
