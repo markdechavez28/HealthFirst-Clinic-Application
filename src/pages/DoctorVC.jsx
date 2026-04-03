@@ -19,26 +19,22 @@ export default function DoctorVC({ onLogout }) {
   const navigate = useNavigate()
   const [showZoomModal, setShowZoomModal] = useState(false)
   const [activeConference, setActiveConference] = useState(null)
-  const [showNew, setShowNew] = useState(true)
-  const [showOngoing, setShowOngoing] = useState(true)
+  const [showUpcoming, setShowUpcoming] = useState(true)
   const [showConcluded, setShowConcluded] = useState(false)
   const [conferences, setConferences] = useState([])
   const [searchTerm, setSearchTerm] = useState("")
   const [isCallStarted, setIsCallStarted] = useState(false)
 
   useEffect(() => {
-    // Authentication is handled by route protection
-    
     loadData()
-    
-    // Listen for storage changes
+
     const handleStorageChange = () => {
       loadData()
     }
-    
+
     window.addEventListener('storage', handleStorageChange)
     window.addEventListener('dataUpdated', handleStorageChange)
-    
+
     return () => {
       window.removeEventListener('storage', handleStorageChange)
       window.removeEventListener('dataUpdated', handleStorageChange)
@@ -48,23 +44,22 @@ export default function DoctorVC({ onLogout }) {
   const loadData = () => {
     const storedConferences = localStorage.getItem('hf_conferences')
     const initialConferences = [
-      { id: 1, patient: "Jessica Smith", date: "Feb 23, 2026", time: "10:00", reason: "Checkup", status: "Ongoing" },
+      { id: 1, patient: "Jessica Smith", date: "Feb 23, 2026", time: "10:00", reason: "Checkup", status: "Upcoming" },
       { id: 2, patient: "Sarah Miller", date: "Feb 23, 2026", time: "14:30", reason: "Common Cold", status: "Upcoming" },
       { id: 3, patient: "Mingyu Kim", date: "Feb 23, 2026", time: "18:00", reason: "Checkup", status: "Upcoming" },
       { id: 4, patient: "Billie Eilish", date: "Feb 23, 2026", time: "16:00", reason: "Follow-up", status: "Upcoming" }
     ]
-    
+
     if (storedConferences) {
       const parsed = JSON.parse(storedConferences)
-      // Check if Jessica Smith with Ongoing status exists
-      const hasOngoingJessica = parsed.some(c => c.patient === "Jessica Smith" && c.status === "Ongoing")
-      if (!hasOngoingJessica) {
-        // Reset to initial data if Jessica Smith ongoing is missing
-        localStorage.setItem('hf_conferences', JSON.stringify(initialConferences))
-        setConferences(initialConferences)
-      } else {
-        setConferences(parsed)
-      }
+      // FIX old data (Ongoing → Upcoming)
+      const fixed = parsed.map(c =>
+        c.status === "Ongoing"
+          ? { ...c, status: "Upcoming" }
+          : c
+      )
+      localStorage.setItem('hf_conferences', JSON.stringify(fixed))
+      setConferences(fixed)
     } else {
       localStorage.setItem('hf_conferences', JSON.stringify(initialConferences))
       setConferences(initialConferences)
@@ -95,19 +90,13 @@ export default function DoctorVC({ onLogout }) {
     setShowZoomModal(false)
     setIsCallStarted(false)
     
-    // Notify other components
     window.dispatchEvent(new Event('dataUpdated'))
   }
 
-  const ongoingConfs = conferences.filter(c => c.status === "Ongoing")
-  const newConfs = conferences.filter(c => c.status === "Upcoming")
+  const upcomingConfs = conferences.filter(c => c.status === "Upcoming")
   const concludedConfs = conferences.filter(c => c.status === "Completed")
 
-  // Filter by search
-  const filteredOngoingConfs = ongoingConfs.filter(c =>
-    c.patient.toLowerCase().includes(searchTerm.toLowerCase())
-  )
-  const filteredNewConfs = newConfs.filter(c =>
+  const filteredUpcomingConfs = upcomingConfs.filter(c =>
     c.patient.toLowerCase().includes(searchTerm.toLowerCase())
   )
   const filteredConcludedConfs = concludedConfs.filter(c =>
@@ -165,59 +154,22 @@ export default function DoctorVC({ onLogout }) {
 
         <div className="space-y-6 max-w-5xl">
 
-          {/* ONGOING CONFERENCES */}
+          {/* UPCOMING CONFERENCES */}
           <div className="bg-white rounded-xl shadow">
             <button
-              onClick={() => setShowOngoing(!showOngoing)}
+              onClick={() => setShowUpcoming(!showUpcoming)}
               className="w-full flex justify-between items-center px-6 py-4 font-semibold bg-[#F5F5F5] rounded-t-xl"
             >
-              Ongoing Conferences
-              {showOngoing ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+              Upcoming Conferences
+              {showUpcoming ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
             </button>
 
-            {showOngoing && (
+            {showUpcoming && (
               <div className="p-6 space-y-4">
-                {filteredOngoingConfs.length === 0 ? (
-                  <p className="text-center text-txtgray">No ongoing conferences</p>
+                {filteredUpcomingConfs.length === 0 ? (
+                  <p className="text-center text-txtgray">No upcoming conferences</p>
                 ) : (
-                  filteredOngoingConfs.map(c => (
-                    <div key={c.id} className="flex justify-between items-center bg-green-50 border-2 border-green-500 rounded-lg p-4">
-                      <div>
-                        <p className="font-semibold">{c.patient}</p>
-                        <p className="text-sm text-txtgray">{c.date} · {c.time}</p>
-                        <p className="text-sm text-txtgray">Reason: {c.reason}</p>
-                        <span className="inline-block mt-2 text-green-600 font-semibold text-sm">● In Progress</span>
-                      </div>
-                      <button
-                        onClick={() => handleJoinConference(c)}
-                        className="bg-green-600 text-white px-5 py-2 rounded-lg hover:bg-green-700 transition flex items-center gap-2"
-                      >
-                        <Video size={16} />
-                        Rejoin
-                      </button>
-                    </div>
-                  ))
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* NEW CONFERENCES */}
-          <div className="bg-white rounded-xl shadow">
-            <button
-              onClick={() => setShowNew(!showNew)}
-              className="w-full flex justify-between items-center px-6 py-4 font-semibold bg-[#F5F5F5] rounded-t-xl"
-            >
-              New Conferences
-              {showNew ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-            </button>
-
-            {showNew && (
-              <div className="p-6 space-y-4">
-                {filteredNewConfs.length === 0 ? (
-                  <p className="text-center text-txtgray">No new conferences</p>
-                ) : (
-                  filteredNewConfs.map(c => (
+                  filteredUpcomingConfs.map(c => (
                     <div key={c.id} className="flex justify-between items-center bg-bglightblue rounded-lg p-4 hover:shadow-md transition">
                       <div>
                         <p className="font-semibold">{c.patient}</p>
@@ -360,15 +312,26 @@ export default function DoctorVC({ onLogout }) {
 }
 
 /* NAV ITEM */
-function NavItem({ icon, text, onClick, active }) {
+function NavItem({ icon, text, to, onClick }) {
+  const navigate = useNavigate()
+
+  const handleClick = () => {
+    if (onClick) onClick()
+    if (to) navigate(to)
+  }
+
   return (
     <button
-      onClick={onClick}
-      className={`flex items-center gap-3 px-4 py-2 rounded-lg text-sm transition
-        ${active
-          ? "bg-bgdarkblue text-white shadow"
-          : "text-black hover:bg-bgdarkblue hover:text-white hover:shadow"
-        }`}
+      onClick={handleClick}
+      className="flex items-center gap-3 px-4 py-2 rounded-lg text-sm text-black transition duration-200"
+      onMouseEnter={(e) => {
+        e.currentTarget.style.backgroundColor = "var(--dark-blue)"
+        e.currentTarget.style.color = "white"
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.backgroundColor = "transparent"
+        e.currentTarget.style.color = "black"
+      }}
     >
       {icon}
       <span>{text}</span>

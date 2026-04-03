@@ -15,6 +15,7 @@ import DoctorDashboard from "./pages/DoctorDashboard";
 import DoctorAppts from "./pages/DoctorAppts";
 import DoctorVC from "./pages/DoctorVC";
 import DoctorMySched from "./pages/DoctorMySched";
+import DoctorPatients from "./pages/DoctorPatients";
 
 // Admin pages
 import AdminLogin from "./pages/AdminLogin.jsx";
@@ -147,9 +148,9 @@ function DoctorRoutes() {
   const [session, setSession] = useState(() => getLS(LS_KEYS.doctorSession, { isAuthed: false }));
 
   useEffect(() => {
-    if (session.isAuthed && location.pathname === "/doctor/login") {
-      navigate("/doctor/dashboard", { replace: true });
-    }
+    // if (session.isAuthed && location.pathname === "/doctor/login") {
+    //  navigate("/doctor/dashboard", { replace: true });
+    //}
     if (!session.isAuthed && location.pathname.startsWith("/doctor/dashboard")) {
       navigate("/doctor/login", { replace: true });
     }
@@ -162,31 +163,57 @@ function DoctorRoutes() {
     if (!session.isAuthed && location.pathname.startsWith("/doctor/schedule")) {
       navigate("/doctor/login", { replace: true });
     }
+    if (!session.isAuthed && location.pathname.startsWith("/doctor/patients")) {
+      navigate("/doctor/login", { replace: true });
+    }
   }, [location.pathname, session, navigate]);
 
-  const onLogin = ({ email, password }) => {
+  //const onLogin = ({ email, password }) => {
     // Default doctor/health professional credentials
-    if (email === "doctor@hf.com" && password === "password") {
-      const next = { isAuthed: true };
-      setSession(next);
-      setLS(LS_KEYS.doctorSession, next);
-      setLS(LS_KEYS.doctor, { email, password, role: "doctor" });
-      navigate("/doctor/dashboard");
-      return { ok: true };
-    }
+    //if (email === "doctor@hf.com" && password === "password") {
+      //const next = { isAuthed: true };
+      //setSession(next);
+      //setLS(LS_KEYS.doctorSession, next);
+      //setLS(LS_KEYS.doctor, { email, password, role: "doctor" });
+      //navigate("/doctor/dashboard");
+      //return { ok: true };
+    //}
     
     // Check stored doctor credentials
-    const doctor = getLS(LS_KEYS.doctor, null);
-    if (doctor && doctor.email === email && doctor.password === password) {
-      const next = { isAuthed: true };
-      setSession(next);
-      setLS(LS_KEYS.doctorSession, next);
-      navigate("/doctor/dashboard");
-      return { ok: true };
-    }
+    //const doctor = getLS(LS_KEYS.doctor, null);
+    //if (doctor && doctor.email === email && doctor.password === password) {
+    //  const next = { isAuthed: true };
+    //  setSession(next);
+    //  setLS(LS_KEYS.doctorSession, next);
+    //  navigate("/doctor/dashboard");
+    //  return { ok: true };
+    //}
     
-    return { ok: false, message: "Invalid credentials." };
-  };
+    //return { ok: false, message: "Invalid credentials." };
+  //};
+  
+  const onLogin = ({ email, password }) => {
+    // Get account from same storage used in DoctorLogin
+    const stored = JSON.parse(localStorage.getItem("hf_account"))
+
+    if (!stored) {
+      return { ok: false, message: "No account found." }
+    }
+
+    if (stored.email === email && stored.password === password) {
+      const next = { isAuthed: true }
+      setSession(next)
+      setLS(LS_KEYS.doctorSession, next)
+
+      // optional: store doctor info
+      setLS(LS_KEYS.doctor, { email, role: "doctor" })
+
+      navigate("/doctor/dashboard")
+      return { ok: true }
+    }
+
+    return { ok: false, message: "Invalid credentials." }
+  }
 
   const onLogout = () => {
     setSession({ isAuthed: false });
@@ -201,6 +228,7 @@ function DoctorRoutes() {
       <Route path="appointments" element={<DoctorAppts onLogout={onLogout} />} />
       <Route path="vc" element={<DoctorVC onLogout={onLogout} />} />
       <Route path="schedule" element={<DoctorMySched onLogout={onLogout} />} />
+      <Route path="patients" element={<DoctorPatients onLogout={onLogout} />} />
       <Route path="" element={<Navigate to="/doctor/login" replace />} />
     </Routes>
   );

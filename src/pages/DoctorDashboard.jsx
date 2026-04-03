@@ -17,19 +17,15 @@ export default function DoctorDashboard({ onLogout }) {
   const [conferences, setConferences] = useState([])
 
   useEffect(() => {
-    
-    // Load data from localStorage or initialize
     loadData()
-    
-    // Listen for storage changes from other tabs/components
+
     const handleStorageChange = () => {
       loadData()
     }
-    
+
     window.addEventListener('storage', handleStorageChange)
-    // Also listen to custom event for same-tab updates
     window.addEventListener('dataUpdated', handleStorageChange)
-    
+
     return () => {
       window.removeEventListener('storage', handleStorageChange)
       window.removeEventListener('dataUpdated', handleStorageChange)
@@ -37,34 +33,43 @@ export default function DoctorDashboard({ onLogout }) {
   }, [])
 
   const loadData = () => {
-    // Initialize default data
     const initialAppointments = [
-      { id: 1, name: "Jessica Smith", date: "Feb 23, 2026", time: "10:00", reason: "Checkup", status: "Ongoing" },
+      { id: 1, name: "Jessica Smith", date: "Feb 23, 2026", time: "10:00", reason: "Checkup", status: "Upcoming" },
       { id: 2, name: "Sarah Miller", date: "Feb 23, 2026", time: "12:30", reason: "Common Cold", status: "Upcoming" },
       { id: 5, name: "Billie Eilish", date: "Feb 23, 2026", time: "14:10", reason: "High Fever", status: "Upcoming" },
       { id: 6, name: "Mingyu Kim", date: "Feb 23, 2026", time: "18:00", reason: "Checkup", status: "Upcoming" }
     ]
+
     const initialRequests = [
       { id: 3, name: "Shakira De Leon", date: "Feb 26, 2026", time: "15:00", reason: "Fever", status: "Pending" },
       { id: 4, name: "Alex Johnson", date: "Feb 27, 2026", time: "09:00", reason: "Checkup", status: "Pending" }
     ]
+
     const initialConferences = [
-      { id: 1, patient: "Jessica Smith", date: "Feb 23, 2026", time: "10:00", reason: "Checkup", status: "Ongoing" },
+      { id: 1, patient: "Jessica Smith", date: "Feb 23, 2026", time: "10:00", reason: "Checkup", status: "Upcoming" },
       { id: 2, patient: "Sarah Miller", date: "Feb 23, 2026", time: "14:30", reason: "Common Cold", status: "Upcoming" },
       { id: 3, patient: "Mingyu Kim", date: "Feb 23, 2026", time: "18:00", reason: "Checkup", status: "Upcoming" },
       { id: 4, patient: "Billie Eilish", date: "Feb 23, 2026", time: "16:00", reason: "Follow-up", status: "Upcoming" }
     ]
 
-    // Load appointments
     const storedAppointments = localStorage.getItem('hf_appointments')
-    if (storedAppointments) {
-      setAppointments(JSON.parse(storedAppointments))
-    } else {
-      localStorage.setItem('hf_appointments', JSON.stringify(initialAppointments))
-      setAppointments(initialAppointments)
-    }
+if (storedAppointments) {
+  const parsed = JSON.parse(storedAppointments)
 
-    // Load requests
+  // Fix old data (Ongoing to Upcoming)
+  const fixed = parsed.map(a =>
+      a.status === "Ongoing"
+        ? { ...a, status: "Upcoming" }
+        : a
+    )
+
+    localStorage.setItem('hf_appointments', JSON.stringify(fixed))
+    setAppointments(fixed)
+  } else {
+    localStorage.setItem('hf_appointments', JSON.stringify(initialAppointments))
+    setAppointments(initialAppointments)
+  }
+
     const storedRequests = localStorage.getItem('hf_requests')
     if (storedRequests) {
       setRequests(JSON.parse(storedRequests))
@@ -73,17 +78,19 @@ export default function DoctorDashboard({ onLogout }) {
       setRequests(initialRequests)
     }
 
-    // Load conferences - auto-reset if Jessica Smith ongoing is missing
     const storedConferences = localStorage.getItem('hf_conferences')
     if (storedConferences) {
       const parsed = JSON.parse(storedConferences)
-      const hasOngoingJessica = parsed.some(c => c.patient === "Jessica Smith" && c.status === "Ongoing")
-      if (!hasOngoingJessica) {
-        localStorage.setItem('hf_conferences', JSON.stringify(initialConferences))
-        setConferences(initialConferences)
-      } else {
-        setConferences(parsed)
-      }
+
+      // Fix old data (Ongoing to Upcoming)
+      const fixed = parsed.map(c =>
+        c.status === "Ongoing"
+          ? { ...c, status: "Upcoming" }
+          : c
+      )
+
+      localStorage.setItem('hf_conferences', JSON.stringify(fixed))
+      setConferences(fixed)
     } else {
       localStorage.setItem('hf_conferences', JSON.stringify(initialConferences))
       setConferences(initialConferences)
@@ -99,15 +106,12 @@ export default function DoctorDashboard({ onLogout }) {
     }
   }
 
-  // Filter today's appointments (Ongoing or Upcoming)
   const todayAppointments = appointments.filter(
-    (a) => a.status === "Ongoing" || a.status === "Upcoming"
+    (a) => a.status === "Upcoming"
   )
-  
-  // Filter pending requests
+
   const pendingRequests = requests.filter((r) => r.status === "Pending")
 
-  // Count statistics
   const totalPatients = appointments.length + requests.length
   const totalConferences = conferences.filter(c => c.status === "Upcoming").length
   const totalAppointments = todayAppointments.length
@@ -162,7 +166,7 @@ export default function DoctorDashboard({ onLogout }) {
           {/* Left column: Appointments & Patient Requests */}
           <div className="flex-1 flex flex-col gap-4">
 
-            {/* Today's Appointments - No collapse */}
+            {/* Today's Appointments */}
             <div className="bg-bglightblue rounded-xl p-4">
               <h3 className="font-semibold mb-3">Appointments</h3>
               <div className="flex flex-col gap-2">
@@ -184,7 +188,7 @@ export default function DoctorDashboard({ onLogout }) {
               </div>
             </div>
 
-            {/* Patient Requests - No collapse */}
+            {/* Patient Requests */}
             <div className="bg-bglightblue rounded-xl p-4">
               <h3 className="font-semibold mb-3">Patient Requests</h3>
               <div className="flex flex-col gap-2">
