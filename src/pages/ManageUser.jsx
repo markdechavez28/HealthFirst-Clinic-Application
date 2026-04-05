@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { supabase, userService, appointmentService } from "../utils/supabaseClient";
-import { X, Plus, Edit2, Trash2, Search, Loader } from "lucide-react";
+import { getAllSubmittedSchedules, approveSchedule, rejectSchedule } from "../services/doctorService";
+import { X, Plus, Edit2, Trash2, Search, Loader, Check, X as XIcon } from "lucide-react";
 
-const ManageUser = ({ onLogout }) => {
+const ManageUser = ({ admin, onLogout }) => {
   // User type toggle state
   const [userType, setUserType] = useState("patient"); // "patient" or "doctor"
 
@@ -30,6 +31,10 @@ const ManageUser = ({ onLogout }) => {
   const [filterDateTo, setFilterDateTo] = useState("");
   const [filterTimeSlot, setFilterTimeSlot] = useState("");
 
+  // Schedule approvals state
+  const [submittedSchedules, setSubmittedSchedules] = useState([]);
+  const [scheduleLoading, setScheduleLoading] = useState(false);
+
   // Form state
   const [formData, setFormData] = useState({
     name: "",
@@ -47,6 +52,7 @@ const ManageUser = ({ onLogout }) => {
   useEffect(() => {
     loadUsers();
     loadAppointments();
+    loadSubmittedSchedules();
   }, [userType]);
 
   // Filter users based on search term
@@ -178,6 +184,56 @@ const ManageUser = ({ onLogout }) => {
       alert("Failed to load appointments. Check console for details.");
     } finally {
       setAppointmentLoading(false);
+    }
+  };
+
+  // Load submitted schedules for approval
+  const loadSubmittedSchedules = async () => {
+    setScheduleLoading(true);
+    try {
+      const data = await getAllSubmittedSchedules();
+      setSubmittedSchedules(data || []);
+    } catch (error) {
+      console.error("Error loading submitted schedules:", error);
+      alert("Failed to load submitted schedules. Check console for details.");
+    } finally {
+      setScheduleLoading(false);
+    }
+  };
+
+  // Handle schedule approval
+  const handleApproveSchedule = async (submittedScheduleID) => {
+    if (!confirm("Are you sure you want to approve this schedule?")) return;
+    if (!admin?.adminID) {
+      alert("Admin ID not found. Please log in again.");
+      return;
+    }
+    
+    try {
+      await approveSchedule(submittedScheduleID, admin.adminID);
+      alert("Schedule approved successfully!");
+      loadSubmittedSchedules();
+    } catch (error) {
+      console.error("Error approving schedule:", error);
+      alert("Failed to approve schedule. Check console for details.");
+    }
+  };
+
+  // Handle schedule rejection
+  const handleRejectSchedule = async (submittedScheduleID) => {
+    if (!confirm("Are you sure you want to reject this schedule?")) return;
+    if (!admin?.adminID) {
+      alert("Admin ID not found. Please log in again.");
+      return;
+    }
+    
+    try {
+      await rejectSchedule(submittedScheduleID, admin.adminID);
+      alert("Schedule rejected successfully!");
+      loadSubmittedSchedules();
+    } catch (error) {
+      console.error("Error rejecting schedule:", error);
+      alert("Failed to reject schedule. Check console for details.");
     }
   };
 
@@ -860,6 +916,78 @@ const ManageUser = ({ onLogout }) => {
                           >
                             {appointment.status || "Unknown"}
                           </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </section>
+        </div>
+
+        {/* Schedule Approvals Section */}
+        <div className="space-y-4">
+          <h2 className="text-lg font-semibold">Schedule Approvals</h2>
+
+          <section className="overflow-hidden rounded-lg border border-slate-200">
+            <div className="bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700">
+              Pending Schedule Approvals ({submittedSchedules.filter(s => s.status === 'For Approval').length})
+              {scheduleLoading && (
+                <Loader className="ml-2 inline h-4 w-4 animate-spin" />
+              )}
+            </div>
+            <div className="w-full overflow-x-auto">
+              {submittedSchedules.filter(s => s.status === 'For Approval').length === 0 && !scheduleLoading ? (
+                <div className="px-4 py-8 text-center text-sm text-slate-500">
+                  No schedules pending approval.
+                </div>
+              ) : (
+                <table className="w-full text-left text-sm">
+                  <thead className="bg-slate-100 text-xs uppercase text-slate-500">
+                    <tr>
+                      <th className="px-4 py-3 font-semibold">Doctor</th>
+                      <th className="px-4 py-3 font-semibold">Submitted</th>
+                      <th className="px-4 py-3 font-semibold">Timeslots</th>
+                      <th className="px-4 py-3 font-semibold">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200">
+                    {submittedSchedules.filter(s => s.status === 'For Approval').map((schedule) => (
+                      <tr key={schedule.submittedScheduleID} className="hover:bg-slate-50">
+                        <td className="px-4 py-3">
+                          <div className="font-medium">{schedule.Doctor?.name || 'Unknown'}</div>
+                          <div className="text-xs text-slate-600">{schedule.Doctor?.email || ''}</div>
+                        </td>
+                        <td className="px-4 py-3 text-xs text-slate-600">
+                          {new Date(schedule.submittedAt).toLocaleDateString()}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="space-y-1">
+                            {schedule.scheduleData.map((slot, index) => (
+                              <div key={index} className="text-xs bg-slate-100 rounded px-2 py-1">
+                                {new Date(slot.date).toLocaleDateString()} - {slot.time}
+                              </div>
+                            ))}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => handleApproveSchedule(schedule.submittedScheduleID)}
+                              className="flex items-center rounded-md bg-green-600 px-3 py-1 text-xs font-semibold text-white hover:bg-green-700"
+                            >
+                              <Check className="mr-1 h-3 w-3" />
+                              Approve
+                            </button>
+                            <button
+                              onClick={() => handleRejectSchedule(schedule.submittedScheduleID)}
+                              className="flex items-center rounded-md bg-red-600 px-3 py-1 text-xs font-semibold text-white hover:bg-red-700"
+                            >
+                              <XIcon className="mr-1 h-3 w-3" />
+                              Reject
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}

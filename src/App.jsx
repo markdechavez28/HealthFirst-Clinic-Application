@@ -233,7 +233,7 @@ function DoctorRoutes() {
 function AdminRoutes() {
   const navigate = useNavigate();
   const location = useLocation();
-  const [session, setSession] = useState(() => getLS(LS_KEYS.adminSession, { isAuthed: false }));
+  const [session, setSession] = useState(() => getLS(LS_KEYS.adminSession, { isAuthed: false, admin: null }));
 
   useEffect(() => {
     if (session.isAuthed && location.pathname === "/admin/login") {
@@ -244,41 +244,27 @@ function AdminRoutes() {
     }
   }, [location.pathname, session, navigate]);
 
-  const onLogin = ({ email, password }) => {
-    // Simple admin authentication - in production, this would check against a backend
-    // Default admin credentials for demo
-    if (email === "admin@healthfirst.com" && password === "admin123") {
-      const next = { isAuthed: true };
-      setSession(next);
-      setLS(LS_KEYS.adminSession, next);
-      setLS(LS_KEYS.admin, { email, password, role: "admin" });
-      navigate("/admin/manage");
-      return { ok: true };
-    }
-    
-    // Check stored admin credentials
-    const admin = getLS(LS_KEYS.admin, null);
-    if (admin && admin.email === email && admin.password === password) {
-      const next = { isAuthed: true };
-      setSession(next);
-      setLS(LS_KEYS.adminSession, next);
-      navigate("/admin/manage");
-      return { ok: true };
-    }
-    
-    return { ok: false, message: "Invalid credentials." };
+  const onLogin = (adminData) => {
+    // AdminLogin component now handles database authentication
+    // Just store the session and admin data
+    const next = { isAuthed: true, admin: adminData };
+    setSession(next);
+    setLS(LS_KEYS.adminSession, next);
+    setLS(LS_KEYS.admin, adminData);
+    navigate("/admin/manage");
+    return { ok: true };
   };
 
   const onLogout = () => {
-    setSession({ isAuthed: false });
-    setLS(LS_KEYS.adminSession, { isAuthed: false });
+    setSession({ isAuthed: false, admin: null });
+    setLS(LS_KEYS.adminSession, { isAuthed: false, admin: null });
     navigate("/admin/login");
   };
 
   return (
     <Routes>
       <Route path="login" element={<AdminLogin onLogin={onLogin} />} />
-      <Route path="manage" element={<ManageUser onLogout={onLogout} />} />
+      <Route path="manage" element={<ManageUser admin={session.admin} onLogout={onLogout} />} />
       <Route path="" element={<Navigate to="/admin/login" replace />} />
     </Routes>
   );

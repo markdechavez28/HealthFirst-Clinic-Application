@@ -72,6 +72,110 @@ export async function createScheduleEntry(entry) {
   return data;
 }
 
+// Submitted Schedules
+export async function submitScheduleForApproval(doctorID, scheduleData) {
+  const { data, error } = await supabase
+    .from("SubmittedSchedule")
+    .insert({
+      doctorID,
+      scheduleData,
+      status: 'For Approval'
+    });
+  if (error) throw error;
+  return data;
+}
+
+export async function getSubmittedSchedulesByDoctor(doctorID) {
+  const { data, error } = await supabase
+    .from("SubmittedSchedule")
+    .select("*")
+    .eq("doctorID", doctorID)
+    .order("submittedAt", { ascending: false });
+  if (error) throw error;
+  return data;
+}
+
+// Admin functions for schedule approval
+export async function getAllSubmittedSchedules() {
+  const { data, error } = await supabase
+    .from("SubmittedSchedule")
+    .select("*, Doctor(name, email)")
+    .order("submittedAt", { ascending: false });
+  if (error) throw error;
+  return data;
+}
+
+export async function approveSchedule(submittedScheduleID, adminID) {
+  // First get the submitted schedule
+  const { data: submitted, error: fetchError } = await supabase
+    .from("SubmittedSchedule")
+    .select("*")
+    .eq("submittedScheduleID", submittedScheduleID)
+    .single();
+  
+  if (fetchError) throw fetchError;
+
+  // Update status to approved
+  const { error: updateError } = await supabase
+    .from("SubmittedSchedule")
+    .update({
+      status: 'Approved',
+      reviewedBy: adminID,
+      reviewedAt: new Date().toISOString()
+    })
+    .eq("submittedScheduleID", submittedScheduleID);
+  
+  if (updateError) throw updateError;
+
+  // Insert into Schedule table
+  const scheduleEntries = submitted.scheduleData.map(slot => ({
+    doctorID: submitted.doctorID,
+    available_date: slot.date,
+    time_slot: slot.time,
+    is_available: true
+  }));
+
+  const { data: inserted, error: insertError } = await supabase
+    .from("Schedule")
+    .insert(scheduleEntries);
+  
+  if (insertError) throw insertError;
+  return inserted;
+}
+
+export async function rejectSchedule(submittedScheduleID, adminID) {
+  const { error } = await supabase
+    .from("SubmittedSchedule")
+    .update({
+      status: 'Rejected',
+      reviewedBy: adminID,
+      reviewedAt: new Date().toISOString()
+    })
+    .eq("submittedScheduleID", submittedScheduleID);
+  
+  if (error) throw error;
+  return true;
+}
+
+// Admin service functions
+export async function getAdminByEmail(email) {
+  const { data, error } = await supabase
+    .from("Admin")
+    .select("*")
+    .eq("email", email)
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function createAdmin(adminData) {
+  const { data, error } = await supabase
+    .from("Admin")
+    .insert(adminData);
+  if (error) throw error;
+  return data;
+}
+
 // Patients that have appointments with this doctor
 export async function getPatientsByDoctor(doctorID) {
   const { data, error } = await supabase

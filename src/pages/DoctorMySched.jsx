@@ -6,25 +6,11 @@ import {
   Video,
   Users,
   Clock,
-  LogOut
+  LogOut,
+  Plus,
+  Trash2
 } from "lucide-react";
-import { getScheduleByDoctor, createScheduleEntry } from "../services/doctorService";
-
-// Generate available time slots
-const TIME_SLOTS = [
-  { value: "09:00", display: "9:00 AM" },
-  { value: "09:30", display: "9:30 AM" },
-  { value: "10:00", display: "10:00 AM" },
-  { value: "10:30", display: "10:30 AM" },
-  { value: "11:00", display: "11:00 AM" },
-  { value: "11:30", display: "11:30 AM" },
-  { value: "13:00", display: "1:00 PM" },
-  { value: "13:30", display: "1:30 PM" },
-  { value: "14:00", display: "2:00 PM" },
-  { value: "14:30", display: "2:30 PM" },
-  { value: "15:00", display: "3:00 PM" },
-  { value: "15:30", display: "3:30 PM" },
-];
+import { getScheduleByDoctor, submitScheduleForApproval, getSubmittedSchedulesByDoctor } from "../services/doctorService";
 
 // Get next 7 days including today
 function getNext7Days() {
@@ -45,14 +31,22 @@ function formatDateDisplay(date) {
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
+function formatTimeDisplay(time24) {
+  const [hours, minutes] = time24.split(':');
+  const hour = parseInt(hours);
+  const ampm = hour >= 12 ? 'PM' : 'AM';
+  const hour12 = hour % 12 || 12;
+  return `${hour12}:${minutes} ${ampm}`;
+}
+
 export default function DoctorMySched({ doctor, onLogout }) {
   const navigate = useNavigate();
   const [schedule, setSchedule] = useState([]);
+  const [submittedSchedules, setSubmittedSchedules] = useState([]);
   const [loading, setLoading] = useState(false);
   const [selectedDate, setSelectedDate] = useState(null);
-  
-  // Calendar state: { "2024-03-08": { "09:00": true, "09:30": true, ... }, ... }
-  const [selectedSlots, setSelectedSlots] = useState({});
+  const [currentTimeslots, setCurrentTimeslots] = useState([]); // timeslots for current date
+  const [newTime, setNewTime] = useState("09:00");
 
   const days = getNext7Days();
 
@@ -60,20 +54,14 @@ export default function DoctorMySched({ doctor, onLogout }) {
     const load = async () => {
       if (!doctor?.doctorID) return;
       try {
-        const data = await getScheduleByDoctor(doctor.doctorID);
-        setSchedule(data || []);
-        
-        // Initialize all slots as checked by default for all dates
-        const allSlots = {};
-        days.forEach((day) => {
-          allSlots[formatDate(day)] = {};
-          TIME_SLOTS.forEach((slot) => {
-            allSlots[formatDate(day)][slot.value] = true;
-          });
-        });
-        setSelectedSlots(allSlots);
+        const [scheduleData, submittedData] = await Promise.all([
+          getScheduleByDoctor(doctor.doctorID),
+          getSubmittedSchedulesByDoctor(doctor.doctorID)
+        ]);
+        setSchedule(scheduleData || []);
+        setSubmittedSchedules(submittedData || []);
       } catch (e) {
-        console.error("failed to load schedule", e);
+        console.error("failed to load data", e);
       }
     };
     load();
@@ -81,74 +69,46 @@ export default function DoctorMySched({ doctor, onLogout }) {
 
   const handleDateSelect = (date) => {
     setSelectedDate(date);
+    // Load existing timeslots for this date if any
+    setCurrentTimeslots([]);
   };
 
-  const handleTimeToggle = (time) => {
-    if (!selectedDate) return;
-    const dateKey = formatDate(selectedDate);
-    setSelectedSlots((prev) => ({
-      ...prev,
-      [dateKey]: {
-        ...prev[dateKey],
-        [time]: !prev[dateKey][time],
-      },
-    }));
+  const handleAddTimeslot = () => {
+    if (!newTime || currentTimeslots.includes(newTime)) return;
+    setCurrentTimeslots(prev => [...prev, newTime].sort());
   };
 
-  const handleCheckAllTimes = () => {
-    if (!selectedDate) return;
-    const dateKey = formatDate(selectedDate);
-    setSelectedSlots((prev) => {
-      const newSlots = { ...prev };
-      TIME_SLOTS.forEach((slot) => {
-        newSlots[dateKey][slot.value] = true;
-      });
-      return newSlots;
-    });
+  const handleRemoveTimeslot = (time) => {
+    setCurrentTimeslots(prev => prev.filter(t => t !== time));
   };
 
-  const handleBackToDateSelection = () => {
-    setSelectedDate(null);
-  };
-
-  const handleConfirm = async () => {
-    if (!doctor?.doctorID && !doctor?.id) {
-      alert("Doctor ID not found. Please refresh and try again.");
+  const handleSubmitSchedule = async () => {
+    if (!doctor?.doctorID || currentTimeslots.length === 0 || !selectedDate) {
+      alert("Please select a date and add at least one timeslot.");
       return;
     }
-    
-    const doctorId = doctor.doctorID || doctor.id;
-    
+
+    const scheduleData = currentTimeslots.map(time => ({
+      date: formatDate(selectedDate),
+      time: time
+    }));
+
     setLoading(true);
     try {
-      // Extract all selected slots from all dates
-      const entries = [];
-      Object.entries(selectedSlots).forEach(([date, times]) => {
-        Object.entries(times).forEach(([time, isSelected]) => {
-          if (isSelected) {
-            entries.push({
-              doctorID: doctorId,
-              available_date: date,
-              time_slot: time,
-            });
-          }
-        });
-      });
-
-      console.log("Doctor ID:", doctorId);
-      console.log("Submitting entries:", entries);
-
-      // Submit all entries
-      if (entries.length > 0) {
-        const res = await createScheduleEntry(entries);
-        console.log("Schedule response:", res);
-        setSchedule((prev) => [...prev, ...(res || [])]);
-      }
-
-      alert("Schedule confirmed successfully!");
+      await submitScheduleForApproval(doctor.doctorID, scheduleData);
+      alert("Schedule submitted for approval successfully!");
+      
+      // Refresh submitted schedules
+      const updated = await getSubmittedSchedulesByDoctor(doctor.doctorID);
+      setSubmittedSchedules(updated || []);
+      
+      // Reset form
+      setSelectedDate(null);
+      setCurrentTimeslots([]);
+      setNewTime("09:00");
     } catch (e) {
-      console.error("unable to confirm schedule", e);
-      alert(`Failed to confirm schedule: ${e.message}`);
+      console.error("Failed to submit schedule", e);
+      alert(`Failed to submit schedule: ${e.message}`);
     } finally {
       setLoading(false);
     }
@@ -189,83 +149,142 @@ export default function DoctorMySched({ doctor, onLogout }) {
       <main className="flex-1 p-6">
         <h1 className="text-3xl font-extrabold mb-6">My Schedule</h1>
         
-        {!selectedDate ? (
-          // Date Selection View
-          <div className="max-w-4xl">
-            <p className="text-slate-600 mb-4">Select a date to set your available time slots</p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-              {days.map((day) => (
+        {/* Set a Schedule Section */}
+        <div className="bg-white rounded-lg shadow p-6 mb-8">
+          <h2 className="text-2xl font-bold mb-4">Set a Schedule</h2>
+          
+          {!selectedDate ? (
+            <>
+              <p className="text-slate-600 mb-4">Select a date to set your available time slots</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                {days.map((day) => (
+                  <button
+                    key={formatDate(day)}
+                    onClick={() => handleDateSelect(day)}
+                    className="p-4 border-2 border-slate-200 rounded-lg hover:border-hf-blue hover:bg-blue-50 transition text-center"
+                  >
+                    <div className="text-sm text-slate-500">{day.toLocaleDateString("en-US", { weekday: "short" })}</div>
+                    <div className="text-lg font-semibold text-slate-900">{formatDateDisplay(day)}</div>
+                  </button>
+                ))}
+              </div>
+            </>
+          ) : (
+            <div>
+              <div className="mb-6">
                 <button
-                  key={formatDate(day)}
-                  onClick={() => handleDateSelect(day)}
-                  className="p-4 border-2 border-slate-200 rounded-lg hover:border-hf-blue hover:bg-blue-50 transition text-center"
+                  onClick={() => setSelectedDate(null)}
+                  className="text-hf-blue hover:text-blue-700 font-semibold text-sm mb-4"
                 >
-                  <div className="text-sm text-slate-500">{day.toLocaleDateString("en-US", { weekday: "short" })}</div>
-                  <div className="text-lg font-semibold text-slate-900">{formatDateDisplay(day)}</div>
+                  ← Change Date
                 </button>
+                <h3 className="text-xl font-bold text-slate-900">
+                  {selectedDate.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
+                </h3>
+              </div>
+
+              {/* Add Timeslot Section */}
+              <div className="mb-6 p-4 border border-slate-200 rounded-lg">
+                <h4 className="font-semibold mb-3">Add Timeslot</h4>
+                <div className="flex gap-3 items-center">
+                  <input
+                    type="time"
+                    value={newTime}
+                    onChange={(e) => setNewTime(e.target.value)}
+                    className="border border-slate-300 rounded px-3 py-2"
+                  />
+                  <button
+                    onClick={handleAddTimeslot}
+                    className="bg-hf-blue text-white px-4 py-2 rounded hover:bg-blue-700 flex items-center gap-2"
+                  >
+                    <Plus size={16} />
+                    Add
+                  </button>
+                </div>
+              </div>
+
+              {/* Current Timeslots */}
+              <div className="mb-6">
+                <h4 className="font-semibold mb-3">Timeslots for this date:</h4>
+                {currentTimeslots.length === 0 ? (
+                  <p className="text-slate-500">No timeslots added yet.</p>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {currentTimeslots.map((time) => (
+                      <div key={time} className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded px-3 py-2">
+                        <span className="font-medium">{formatTimeDisplay(time)}</span>
+                        <button
+                          onClick={() => handleRemoveTimeslot(time)}
+                          className="text-red-500 hover:text-red-700"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex gap-3 justify-end">
+                <button
+                  onClick={() => setSelectedDate(null)}
+                  className="border-2 border-slate-300 hover:border-slate-400 text-slate-700 font-semibold px-6 py-2 rounded"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSubmitSchedule}
+                  disabled={loading || currentTimeslots.length === 0}
+                  className="bg-hf-blue hover:bg-blue-700 disabled:opacity-50 text-white font-semibold px-6 py-2 rounded"
+                >
+                  {loading ? "Submitting..." : "Submit for Approval"}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Submitted Schedule Section */}
+        <div className="bg-white rounded-lg shadow p-6">
+          <h2 className="text-2xl font-bold mb-4">Submitted Schedules</h2>
+          
+          {submittedSchedules.length === 0 ? (
+            <p className="text-slate-500">No schedules submitted yet.</p>
+          ) : (
+            <div className="space-y-4">
+              {submittedSchedules.map((submitted) => (
+                <div key={submitted.submittedScheduleID} className="border border-slate-200 rounded-lg p-4">
+                  <div className="flex justify-between items-start mb-3">
+                    <div>
+                      <p className="font-semibold text-slate-900">
+                        Submitted on {new Date(submitted.submittedAt).toLocaleDateString()}
+                      </p>
+                      <p className="text-sm text-slate-600">
+                        {submitted.scheduleData.length} timeslot{submitted.scheduleData.length !== 1 ? 's' : ''}
+                      </p>
+                    </div>
+                    <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                      submitted.status === 'Approved' ? 'bg-green-100 text-green-800' :
+                      submitted.status === 'Rejected' ? 'bg-red-100 text-red-800' :
+                      'bg-yellow-100 text-yellow-800'
+                    }`}>
+                      {submitted.status}
+                    </span>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                    {submitted.scheduleData.map((slot, index) => (
+                      <div key={index} className="bg-slate-50 rounded px-3 py-2 text-sm">
+                        <div className="font-medium">{new Date(slot.date).toLocaleDateString()}</div>
+                        <div className="text-slate-600">{formatTimeDisplay(slot.time)}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               ))}
             </div>
-          </div>
-        ) : (
-          // Time Selection View
-          <div className="bg-white rounded-lg shadow p-6 max-w-2xl">
-            <div className="mb-6">
-              <button
-                onClick={handleBackToDateSelection}
-                className="text-hf-blue hover:text-blue-700 font-semibold text-sm mb-4"
-              >
-                ← Change Date
-              </button>
-              <h2 className="text-2xl font-bold text-slate-900">
-                {selectedDate.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
-              </h2>
-              <p className="text-slate-600 text-sm mt-2">Select your available time slots</p>
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6">
-              {TIME_SLOTS.map((slot) => {
-                const dateKey = formatDate(selectedDate);
-                const isChecked = selectedSlots[dateKey]?.[slot.value] ?? true;
-                return (
-                  <label key={slot.value} className="flex items-center gap-3 p-3 border border-slate-200 rounded-lg hover:bg-blue-50 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={isChecked}
-                      onChange={() => handleTimeToggle(slot.value)}
-                      className="w-4 h-4 accent-hf-blue"
-                    />
-                    <span className="font-medium text-slate-700">{slot.display}</span>
-                  </label>
-                );
-              })}
-            </div>
-
-            <div className="flex gap-3">
-              <button
-                onClick={handleCheckAllTimes}
-                className="text-hf-blue hover:text-blue-700 font-semibold text-sm"
-              >
-                Check All Times
-              </button>
-            </div>
-
-            <div className="mt-8 flex gap-3 justify-end">
-              <button
-                onClick={handleBackToDateSelection}
-                className="border-2 border-slate-300 hover:border-slate-400 text-slate-700 font-semibold px-6 py-2 rounded"
-              >
-                Back
-              </button>
-              <button
-                onClick={handleConfirm}
-                disabled={loading}
-                className="bg-hf-blue hover:bg-blue-700 disabled:opacity-50 text-white font-semibold px-6 py-2 rounded"
-              >
-                {loading ? "Confirming..." : "Confirm All Dates"}
-              </button>
-            </div>
-          </div>
-        )}
+          )}
+        </div>
       </main>
     </div>
   );
