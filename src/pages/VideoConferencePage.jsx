@@ -77,13 +77,24 @@ export function VideoConferencePage({ patient }) {
     );
   }
 
-  // Status categories
-  const ongoing = appointments.filter(a => a.status === "ongoing");
-  const approved = appointments.filter(a => a.status === "upcoming");
-  const pending = appointments.filter(a => a.status === "pending");
-  const concluded = appointments
-    .filter(a => a.status === "completed")
-    .sort((a, b) => new Date(b.appointment_date) - new Date(a.appointment_date));
+  // Helper function to check if appointment is in present or future
+  const isPresentOrFuture = (appointment) => {
+    const now = new Date();
+    const apptDate = new Date(appointment.appointment_date);
+    
+    // Parse time slot and set it on the appointment date
+    if (appointment.time_slot) {
+      const [hours, minutes] = appointment.time_slot.split(':').map(Number);
+      apptDate.setHours(hours, minutes, 0, 0);
+    }
+    
+    return apptDate >= now;
+  };
+
+  // Status categories - filtering out past appointments
+  const ongoing = appointments.filter(a => a.status === "ongoing" && isPresentOrFuture(a));
+  const approved = appointments.filter(a => a.status === "upcoming" && isPresentOrFuture(a));
+  const pending = appointments.filter(a => a.status === "pending" && isPresentOrFuture(a));
 
   return (
     <div className="flex flex-col h-screen">
@@ -157,20 +168,7 @@ export function VideoConferencePage({ patient }) {
           ))}
         </div>
 
-        {/* Completed Conferences */}
-        <div className="bg-white rounded-2xl p-6 mb-6 shadow-sm">
-          <h2 className="font-semibold mb-4">Concluded Conferences</h2>
-          {concluded.length === 0 && <p className="text-slate-400 text-sm">No concluded consultations</p>}
-          {concluded.map(appt => (
-            <div key={appt.appointmentID} className="bg-gray-100 rounded-xl p-5 flex justify-between items-center mb-4">
-              <div>
-                <h3 className="font-bold text-lg">Dr. {appt.Doctor?.name || "Doctor"}</h3>
-                <p className="text-sm">{appt.appointment_date} • {appt.time_slot}</p>
-                <p className="text-sm opacity-90">Reason: {appt.reason || "Consultation"}</p>
-              </div>
-            </div>
-          ))}
-        </div>
+
 
       </main>
     </div>

@@ -118,6 +118,11 @@ export const userService = {
 
   // Create a new doctor
   async createDoctor(doctorData) {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    const dateCreated = `${y}-${m}-${dd}`;
     const { data, error } = await supabase
       .from("Doctor")
       .insert([
@@ -128,7 +133,7 @@ export const userService = {
           specialty: doctorData.specialty,
           contact_num: doctorData.contact_num,
           pfp: doctorData.pfp,
-          date_created: new Date().toISOString().split("T")[0],
+          date_created: dateCreated,
         },
       ])
       .select()

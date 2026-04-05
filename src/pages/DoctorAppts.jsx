@@ -91,7 +91,7 @@ export default function DoctorAppts({ doctor, onLogout }) {
     );
   const filteredRequests = appointments
     .filter(isFutureOrPresent)
-    .filter((a) => a.status === "pending")
+    .filter((a) => (a.status || "").toLowerCase() === "pending")
     .filter((a) =>
       (a.Patient?.name || "").toLowerCase().includes(searchTerm.toLowerCase())
     );
@@ -106,8 +106,11 @@ export default function DoctorAppts({ doctor, onLogout }) {
 
         <div className="flex flex-col items-center mb-8">
           <img src="/doctor.jpg" alt="Doctor" className="w-20 h-20 rounded-full border-2 border-lightgreen" />
-          <h2 className="text-xl mt-3 font-semibold">Dr. Sam Chua</h2>
-          <p className="text-sm text-hf-blue">Pediatrician</p>
+          <h2 className="text-xl mt-3 font-semibold">Dr. {doctor?.name || "Unknown"}</h2>
+          {doctor?.doctorID && (
+            <p className="text-xs text-gray-500 text-center">ID: {doctor.doctorID}</p>
+          )}
+          <p className="text-sm text-hf-blue">{doctor?.specialty || ""}</p>
         </div>
 
         <nav className="flex flex-col gap-2">
@@ -180,14 +183,14 @@ export default function DoctorAppts({ doctor, onLogout }) {
                   <div
                     key={req.appointmentID}
                     className={`bg-white p-3 rounded-lg flex justify-between items-center transition duration-300 ease-in-out transform
-                      ${req.status !== "pending" ? "opacity-70" : "hover:scale-[1.02]"}`}
+                      ${(req.status || "").toLowerCase() !== "pending" ? "opacity-70" : "hover:scale-[1.02]"}`}
                   >
                     <div>
                       <p className="font-semibold">{req.Patient?.name || ""}</p>
                       <p className="text-xs text-gray-500">{req.appointment_date} {req.time_slot}</p>
                     </div>
                     <div className="flex gap-2">
-                      {req.status === "pending" ? (
+                      {(req.status || "").toLowerCase() === "pending" ? (
                         <>
                           <button
                             className="bg-green-500 text-white px-3 py-1 rounded hover:bg-green-600 transition"
@@ -236,12 +239,13 @@ function NavItem({ icon, text, to, onClick }) {
 
 /* STATUS COLOR FUNCTION */
 function statusColor(status) {
-  switch(status){
-    case "Ongoing": return "bg-green-500";          // could define hf-teal later
-    case "Upcoming": return "bg-hf-blue";           // use brand blue
-    case "Pending": return "bg-orange-500";
-    case "Rejected": return "bg-red-500";
-    case "Completed": return "bg-gray-400";
+  const normalizedStatus = status?.toLowerCase() || "";
+  switch(normalizedStatus){
+    case "ongoing": return "bg-green-500";
+    case "upcoming": return "bg-hf-blue";
+    case "pending": return "bg-orange-500";
+    case "rejected": return "bg-red-500";
+    case "completed": return "bg-gray-400";
     default: return "bg-gray-300";
   }
 }
