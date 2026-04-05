@@ -69,11 +69,28 @@ export default function DoctorAppts({ doctor, onLogout }) {
     }
   };
 
-  // Filtered by search
-  const filteredAppointments = appointments.filter((a) =>
-    (a.Patient?.name || "").toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Helper function to check if appointment is in the future (or present)
+  const now = new Date();
+  const isFutureOrPresent = (appt) => {
+    const apptDate = appt.appointment_date;
+    const apptTime = appt.time_slot;
+
+    // Parse appointment time
+    const [apptHour, apptMinute] = apptTime ? apptTime.split(":").map(Number) : [0, 0];
+    const apptDateTime = new Date(apptDate);
+    apptDateTime.setHours(apptHour, apptMinute, 0);
+
+    return apptDateTime >= now;
+  };
+
+  // Filtered by search and exclude past appointments
+  const filteredAppointments = appointments
+    .filter(isFutureOrPresent)
+    .filter((a) =>
+      (a.Patient?.name || "").toLowerCase().includes(searchTerm.toLowerCase())
+    );
   const filteredRequests = appointments
+    .filter(isFutureOrPresent)
     .filter((a) => a.status === "pending")
     .filter((a) =>
       (a.Patient?.name || "").toLowerCase().includes(searchTerm.toLowerCase())

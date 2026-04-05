@@ -66,17 +66,36 @@ export default function DoctorDashboard({ doctor, onLogout }) {
     }
   };
 
-  // Filter today's appointments (statuses may be lowercase now)
-  const todayAppointments = appointments.filter(
-    (a) => a.status === "ongoing" || a.status === "upcoming"
-  );
-
-  // Pending requests are simply appointments with status pending
-  const pendingRequests = appointments.filter((a) => a.status === "pending");
-
   // Count statistics - today's appointments only
   const today = new Date().toISOString().split("T")[0];
-  const todayOnlyAppts = appointments.filter((a) => a.appointment_date === today);
+  const now = new Date();
+
+  // Helper function to check if appointment is in the future (or present)
+  const isFutureOrPresent = (appt) => {
+    const apptDate = appt.appointment_date;
+    const apptTime = appt.time_slot;
+
+    // Parse appointment time
+    const [apptHour, apptMinute] = apptTime ? apptTime.split(":").map(Number) : [0, 0];
+    const apptDateTime = new Date(apptDate);
+    apptDateTime.setHours(apptHour, apptMinute, 0);
+
+    return apptDateTime >= now;
+  };
+
+  // Filter today's appointments (statuses may be lowercase now)
+  const todayAppointments = appointments
+    .filter(isFutureOrPresent)
+    .filter((a) => a.status === "ongoing" || a.status === "upcoming");
+
+  // Pending requests are simply appointments with status pending (and in the future)
+  const pendingRequests = appointments
+    .filter(isFutureOrPresent)
+    .filter((a) => a.status === "pending");
+
+  // Filter only future/present appointments for statistics and display
+  const futureAppointments = appointments.filter(isFutureOrPresent);
+  const todayOnlyAppts = futureAppointments.filter((a) => a.appointment_date === today);
   const totalPatients = new Set(todayOnlyAppts.map((a) => a.patientID)).size;
   const totalConferences = todayOnlyAppts.filter((a) =>
     a.status === "upcoming" || a.status === "ongoing"

@@ -17,7 +17,7 @@ import DoctorDashboard from "./pages/DoctorDashboard";
 import DoctorAppts from "./pages/DoctorAppts";
 import DoctorVC from "./pages/DoctorVC";
 import DoctorMySched from "./pages/DoctorMySched";
-import DoctorPatientPfp from "./pages/DoctorPatientPfp";
+import DoctorPatients from "./pages/DoctorPatients";
 
 // Admin pages
 import AdminLogin from "./pages/AdminLogin.jsx";
@@ -223,7 +223,7 @@ function DoctorRoutes() {
       <Route path="appointments" element={<DoctorAppts doctor={doctor} onLogout={onLogout} />} />
       <Route path="vc" element={<DoctorVC doctor={doctor} onLogout={onLogout} />} />
       <Route path="schedule" element={<DoctorMySched doctor={doctor} onLogout={onLogout} />} />
-      <Route path="patients" element={<DoctorPatientPfp doctor={doctor} onLogout={onLogout} />} />
+      <Route path="patients" element={<DoctorPatients doctor={doctor} onLogout={onLogout} />} />
       <Route path="" element={<Navigate to="/doctor/login" replace />} />
     </Routes>
   );

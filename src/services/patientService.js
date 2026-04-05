@@ -54,6 +54,53 @@ export async function createAppointment({ patientID, doctorID, appointment_date,
   return data;
 }
 
+export async function saveMedicalHistory({ patientID, height, weight, bloodPressure, temperature, pastIllness, previousSurgery, allergies, additionalDetails }) {
+  const payload = {
+    patientID,
+    height: height ? parseInt(height, 10) : null,
+    weight: weight ? parseInt(weight, 10) : null,
+    bloodPressure: bloodPressure || null,
+    temperature: temperature ? parseFloat(temperature) : null,
+    pastIllness: pastIllness || null,
+    previousSurgery: previousSurgery || null,
+    allergies: allergies || null,
+    additionalDetails: additionalDetails || null,
+  };
+
+  const { data, error } = await supabase
+    .from("MedicalHistory")
+    .upsert(payload, { onConflict: "patientID" })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function isDoctorTimeslotAvailable(doctorID, appointment_date, time_slot) {
+  const { data: schedule, error: scheduleError } = await supabase
+    .from("Schedule")
+    .select("*")
+    .eq("doctorID", doctorID)
+    .eq("available_date", appointment_date)
+    .eq("time_slot", time_slot)
+    .eq("is_available", true)
+    .single();
+
+  if (scheduleError && scheduleError.code !== "PGRST116") throw scheduleError;
+  if (!schedule) return false;
+
+  const { data: existing, error: appointmentError } = await supabase
+    .from("Appointment")
+    .select("appointmentID")
+    .eq("doctorID", doctorID)
+    .eq("appointment_date", appointment_date)
+    .eq("time_slot", time_slot)
+    .neq("status", "cancelled");
+
+  if (appointmentError) throw appointmentError;
+  return !(existing && existing.length > 0);
+}
+
 // Doctors
 export async function listDoctors() {
   const { data, error } = await supabase

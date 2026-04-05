@@ -2,12 +2,7 @@ import React from "react";
 
 export function ChooseTime({ onNext, onBack, selectedDate, setSelectedDate, selectedTime, setSelectedTime }) {
   
-  const times = [
-    "09:00 AM", "09:30 AM", "10:00 AM",
-    "10:30 AM", "11:00 AM", "11:30 AM",
-    "01:00 PM", "01:30 PM", "02:00 PM",
-    "02:30 PM", "03:00 PM", "03:30 PM"
-  ];
+  const [timeInput, setTimeInput] = React.useState(selectedTime || "09:00");
 
   // Generate available dates (next 14 days)
   const generateDates = () => {
@@ -62,7 +57,12 @@ export function ChooseTime({ onNext, onBack, selectedDate, setSelectedDate, sele
             return (
               <button
                 key={dateValue}
-                onClick={() => setSelectedDate(dateValue)}
+                onClick={() => {
+                  setSelectedDate(dateValue);
+                  if (timeInput) {
+                    setSelectedTime(timeInput);
+                  }
+                }}
                 className={
                   "w-full px-4 py-3 text-left font-semibold text-slate-700 hover:bg-sky-100 border " +
                   (selectedDate === dateValue ? "border-hf-blue bg-sky-100" : "border-slate-200 bg-white")
@@ -89,29 +89,36 @@ export function ChooseTime({ onNext, onBack, selectedDate, setSelectedDate, sele
           </div>
 
           <div className="text-sm font-semibold text-slate-600 mb-3">
-            Available time slots
+            Preferred time
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {times.map((t) => (
-              <button
-                key={t}
-                onClick={() => selectedDate && setSelectedTime(t)}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
+            <label className="flex flex-col gap-2">
+              <span className="text-xs font-semibold text-slate-500">Pick a time</span>
+              <input
+                type="time"
+                value={timeInput}
+                onChange={(e) => {
+                  setTimeInput(e.target.value);
+                  if (selectedDate) {
+                    setSelectedTime(e.target.value);
+                  }
+                }}
                 disabled={!selectedDate}
-                className={
-                  "px-3 py-2 font-semibold text-slate-800 hover:bg-sky-200 border transition " +
-                  (selectedTime === t ? "bg-hf-blue text-white border-hf-blue" : "bg-sky-100 border-slate-200") +
-                  (selectedDate ? "" : " opacity-40 cursor-not-allowed")
-                }
-              >
-                {t}
-              </button>
-            ))}
+                className="w-full rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:ring-2 focus:ring-hf-blue/30"
+              />
+            </label>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className="text-xs text-slate-500">Selected time</div>
+              <div className="mt-2 text-lg font-bold text-slate-900">
+                {selectedTime ? selectedTime : "No time selected"}
+              </div>
+            </div>
           </div>
 
           {selectedDate && !selectedTime && (
             <div className="mt-4 p-3 rounded-lg bg-amber-50 border border-amber-200">
-              <p className="text-xs font-semibold text-amber-900">⏰ Please select a time slot</p>
+              <p className="text-xs font-semibold text-amber-900">⏰ Please pick a valid time using the clock</p>
             </div>
           )}
 

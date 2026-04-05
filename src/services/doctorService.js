@@ -178,14 +178,52 @@ export async function createAdmin(adminData) {
 
 // Patients that have appointments with this doctor
 export async function getPatientsByDoctor(doctorID) {
-  const { data, error } = await supabase
+  const { data: appointments, error: appointmentError } = await supabase
     .from("Appointment")
-    .select("Patient(*)")
+    .select("patientID")
     .eq("doctorID", doctorID);
+  if (appointmentError) throw appointmentError;
+  if (!appointments || appointments.length === 0) return [];
+
+  const patientIds = [...new Set(appointments.map((appt) => appt.patientID).filter(Boolean))];
+  if (patientIds.length === 0) return [];
+
+  const { data, error } = await supabase
+    .from("Patient")
+    .select("*, MedicalHistory(*)")
+    .in("patientID", patientIds);
   if (error) throw error;
   if (!data) return [];
-  const patients = data.map((a) => a.Patient).filter(Boolean);
-  // return unique by patientID
-  const unique = [...new Map(patients.map((p) => [p.patientID, p])).values()];
-  return unique;
+
+  const patients = data.map((patient) => ({
+    ...patient,
+    medicalHistory: Array.isArray(patient.MedicalHistory) ? patient.MedicalHistory[0] || null : null,
+  }));
+
+  return patients;
+}
+
+export async function getDoctorPatientProfiles() {
+  const { data, error } = await supabase
+    .from("MedicalHistory")
+    .select("*, Patient(*)");
+  if (error) throw error;
+  if (!data) return [];
+
+  return data.map((history) => ({
+    patientID: history.patientID,
+    medicalHistory: history,
+    ...history.Patient,
+  }));
+}
+
+// Get medical history for a patient
+export async function getMedicalHistoryByPatient(patientID) {
+  const { data, error } = await supabase
+    .from("MedicalHistory")
+    .select("*")
+    .eq("patientID", patientID)
+    .single();
+  if (error && error.code !== 'PGRST116') throw error; // PGRST116 is "no rows found"
+  return data || null;
 }
