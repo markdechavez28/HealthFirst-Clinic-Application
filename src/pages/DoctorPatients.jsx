@@ -13,7 +13,8 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
-import { getDoctorPatientProfiles } from "../services/doctorService";
+import { getDoctorPatientProfiles, updatePrescriptionUrl } from "../services/doctorService";
+import { supabase } from "../utils/supabaseClient";
 
 export default function DoctorPatients({ doctor, onLogout }) {
   const navigate = useNavigate();
@@ -30,6 +31,29 @@ export default function DoctorPatients({ doctor, onLogout }) {
   const [selectedFile, setSelectedFile] = useState(null);
 
   const [showEditModal, setShowEditModal] = useState(false);
+  // Limiting Filetypes for Prescription Upload
+  const [uploading, setUploading] = useState(false);
+  const handleFileChange = (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  const allowedTypes = ['image/jpeg', 'image/png', 'application/pdf'];
+  if (!allowedTypes.includes(file.type)) {
+    alert('Only JPEG, PNG images and PDF files are allowed.');
+    e.target.value = '';
+    setSelectedFile(null);
+    return;
+  }
+
+  if (file.size > 5 * 1024 * 1024) {
+    alert('File size must be less than 5MB.');
+    e.target.value = '';
+    setSelectedFile(null);
+    return;
+  }
+
+  setSelectedFile(file);
+};
 
   // Fetch patients from database
   useEffect(() => {
@@ -64,8 +88,8 @@ export default function DoctorPatients({ doctor, onLogout }) {
             allergies: medicalHistory?.allergies || "None",
             additionalDetails: medicalHistory?.additionalDetails || "N/A",
             purpose: "Consultation",
-            prescription: "",
-            fileObject: null,
+            prescription: medicalHistory?.prescription_url ? medicalHistory.prescription_url.split('/').pop() : "",
+            prescriptionUrl: medicalHistory?.prescription_url || null,
             status: "completed",
           };
         });
@@ -120,30 +144,87 @@ export default function DoctorPatients({ doctor, onLogout }) {
     return searchMatch && genderMatch;
   });
 
-  const handleUpload = () => {
-    if (!selectedFile || !selectedPatient) return;
-    const updated = patients.map((p) =>
+const handleUpload = async () => {
+  if (!selectedFile || !selectedPatient) return;
+
+  setUploading(true);
+  try {
+    const fileExt = selectedFile.name.split('.').pop();
+    const fileName = `${selectedPatient.id}_${Date.now()}.${fileExt}`;
+    const filePath = `prescriptions/${fileName}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('prescriptions')
+      .upload(filePath, selectedFile, { cacheControl: '3600' });
+
+    if (uploadError) throw uploadError;
+
+    const { data: urlData } = supabase.storage
+      .from('prescriptions')
+      .getPublicUrl(filePath);
+    const publicUrl = urlData.publicUrl;
+
+    await updatePrescriptionUrl(selectedPatient.id, publicUrl);
+    
+    const updated = patients.map(p =>
       p.id === selectedPatient.id
-        ? { ...p, prescription: selectedFile.name, fileObject: selectedFile }
+        ? { 
+            ...p, 
+            prescription: selectedFile.name,   // filename for UI
+            fileObject: selectedFile,          // keep for local preview
+            prescriptionUrl: publicUrl         // store the actual URL
+          }
         : p
     );
     savePatients(updated);
+
     setShowUploadModal(false);
     setSelectedFile(null);
-  };
+    alert('File uploaded!');
+  } catch (error) {
+    console.error('Upload failed:', error.message);
+    alert('Upload failed: ' + error.message);
+  } finally {
+    setUploading(false);
+  }
+};
 
   const handleView = (p) => {
-    if (!p.fileObject) return;
-    setSelectedPatient(p);
-    setShowViewModal(true);
+    if (p.prescriptionUrl) {
+      setSelectedPatient(p);
+      setShowViewModal(true);
+    } else if (p.fileObject) {
+      setSelectedPatient(p);
+      setShowViewModal(true);
+    } else {
+      alert('No file');
+    }
   };
 
-  const handleDeletePrescription = (p) => {
-    const updated = patients.map((pt) =>
-      pt.id === p.id ? { ...pt, prescription: "", fileObject: null } : pt
-    );
-    savePatients(updated);
-    setShowEditModal(false);
+  const handleDeletePrescription = async (p) => {
+    if (!confirm('Delete this prescription?')) return;
+
+    try {
+      if (p.prescriptionUrl) {
+        const filePath = p.prescriptionUrl.split('/').slice(-2).join('/');
+        const { error: storageError } = await supabase.storage
+          .from('prescriptions')
+          .remove([filePath]);
+        if (storageError) throw storageError;
+
+        // Clear URL in database
+        await updatePrescriptionUrl(p.id, null);
+      }
+
+      const updated = patients.map(pt =>
+        pt.id === p.id ? { ...pt, prescription: "", fileObject: null, prescriptionUrl: null } : pt
+      );
+      setPatients(updated);
+      alert('Prescription deleted');
+    } catch (error) {
+      console.error('Delete failed:', error.message);
+      alert('Delete failed');
+    }
   };
 
   const handleLogout = () => {
@@ -296,25 +377,27 @@ export default function DoctorPatients({ doctor, onLogout }) {
 
       {showUploadModal && (
         <Modal onClose={() => setShowUploadModal(false)} title="Upload Prescription">
-          <input type="file" onChange={(e) => setSelectedFile(e.target.files[0])} />
-          <button onClick={handleUpload} className="mt-3 bg-[#3e68a3] text-white px-4 py-2 rounded">
-            Save
+          <input type="file" accept="image/jpeg,image/png,application/pdf" onChange={handleFileChange} />
+          <button onClick={handleUpload} disabled={uploading} className="mt-3 bg-[#3e68a3] text-white px-4 py-2 rounded">
+            {uploading ? 'Uploading...' : 'Save'}
           </button>
         </Modal>
       )}
 
       {showViewModal && selectedPatient && (
         <Modal onClose={() => setShowViewModal(false)} title={`Viewing: ${selectedPatient.prescription}`}>
-          {selectedPatient.fileObject && selectedPatient.fileObject.type === "application/pdf" ? (
-            <iframe
-              src={URL.createObjectURL(selectedPatient.fileObject)}
-              className="w-full h-64"
-            />
+          {selectedPatient.prescriptionUrl ? (
+            selectedPatient.prescriptionUrl.endsWith('.pdf') ? (
+              <iframe src={selectedPatient.prescriptionUrl} className="w-full h-64" title="PDF" />
+            ) : (
+              <img src={selectedPatient.prescriptionUrl} className="w-full max-h-64 object-contain" alt="Prescription" />
+            )
           ) : selectedPatient.fileObject ? (
-            <img
-              src={URL.createObjectURL(selectedPatient.fileObject)}
-              className="w-full max-h-64 object-contain"
-            />
+            selectedPatient.fileObject.type === "application/pdf" ? (
+              <iframe src={URL.createObjectURL(selectedPatient.fileObject)} className="w-full h-64" />
+            ) : (
+              <img src={URL.createObjectURL(selectedPatient.fileObject)} className="w-full max-h-64 object-contain" />
+            )
           ) : (
             <p>No file to display</p>
           )}

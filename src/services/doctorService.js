@@ -227,3 +227,14 @@ export async function getMedicalHistoryByPatient(patientID) {
   if (error && error.code !== 'PGRST116') throw error; // PGRST116 is "no rows found"
   return data || null;
 }
+
+export async function updatePrescriptionUrl(patientID, prescriptionUrl) {
+  // Upsert: insert or update based on patientID
+  const { data, error } = await supabase
+    .from("MedicalHistory")
+    .update({ prescription_url: prescriptionUrl })
+    .eq("patientID", patientID);
+  if (error) throw error;
+  console.log('Updating prescription URL for patient', patientID, prescriptionUrl);
+  return data;
+}

@@ -5,6 +5,8 @@ import { supabase } from "../utils/supabaseClient";
 export function ConsultationLogPage({ patient }) {
   const [selected, setSelected] = useState(null);
   const [consultations, setConsultations] = useState([]);
+  const [prescriptionUrl, setPrescriptionUrl] = useState(null);
+  const [loadingPrescription, setLoadingPrescription] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -19,6 +21,35 @@ export function ConsultationLogPage({ patient }) {
     };
     load();
   }, [patient]);
+
+  // Load prescription URL
+  useEffect(() => {
+    const loadPrescription = async () => {
+      if (!patient?.patientID) return;
+      setLoadingPrescription(true);
+      const { data, error } = await supabase
+        .from("MedicalHistory")
+        .select("prescription_url")
+        .eq("patientID", patient.patientID)
+        .maybeSingle();
+      if (!error && data?.prescription_url) {
+        setPrescriptionUrl(data.prescription_url);
+      } else {
+        setPrescriptionUrl(null);
+      }
+      setLoadingPrescription(false);
+    };
+    loadPrescription();
+  }, [patient]);
+
+  const handleOpenPrescription = () => {
+    if (prescriptionUrl) {
+      // Open in new tab (works for PDFs and images)
+      window.open(prescriptionUrl, "_blank");
+    } else {
+      alert("No prescription available.");
+    }
+  };
 
   return (
     <div className="p-6 lg:p-8">
@@ -90,17 +121,20 @@ export function ConsultationLogPage({ patient }) {
           </div>
 
           <button
-            onClick={() =>
-              window.open("https://example.com/sample-prescription.pdf", "_blank")
-            }
-            className="mt-5 w-full rounded-2xl bg-hf-blue px-4 py-3 font-extrabold text-white shadow-card hover:bg-hf-blueDark active:translate-y-[1px]"
+            onClick={() => prescriptionUrl && window.open(prescriptionUrl, "_blank")}
+            disabled={!prescriptionUrl || loadingPrescription}
+            className={`mt-5 w-full rounded-2xl px-4 py-3 font-extrabold text-white shadow-card hover:bg-hf-blueDark active:translate-y-[1px] ${
+              prescriptionUrl && !loadingPrescription
+                ? "bg-hf-blue"
+                : "bg-gray-400 cursor-not-allowed"
+            }`}
           >
-            Download Prescription
+            {loadingPrescription
+              ? "Loading..."
+              : prescriptionUrl
+              ? "View Prescription"
+              : "No Prescription"}
           </button>
-
-          <p className="mt-3 text-xs text-slate-500">
-            * This is a UI-only link for now.
-          </p>
         </div>
       </div>
 

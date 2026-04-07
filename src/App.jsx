@@ -105,6 +105,16 @@ function PatientRoutes() {
   const onLogin = async ({ email, password }) => {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) return { ok: false, message: error.message };
+    const userId = data.user.id;
+    const { data: patient, error: patientError } = await supabase
+      .from("Patient")
+      .select("patientID")
+      .eq("patientID", userId)
+      .maybeSingle();
+    if (patientError || !patient) {
+      await supabase.auth.signOut();
+      return { ok: false, message: "Invalid credentials." };
+    }
     navigate("/patient/dashboard");
     return { ok: true };
   };
@@ -207,6 +217,16 @@ function DoctorRoutes() {
   const onLogin = async ({ email, password }) => {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) return { ok: false, message: error.message };
+    const userId = data.user.id;
+    const { data: doctor, error: doctorError } = await supabase
+      .from("Doctor")
+      .select("doctorID")
+      .eq("doctorID", userId)
+      .maybeSingle();
+    if (doctorError || !doctor) {
+      await supabase.auth.signOut();
+      return { ok: false, message: "Invalid credentials." };
+    }
     navigate("/doctor/dashboard");
     return { ok: true };
   };
