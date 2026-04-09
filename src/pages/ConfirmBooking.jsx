@@ -1,6 +1,7 @@
 import React from "react";
 
-export function ConfirmBooking({ onBack, onConfirm }) {
+export function ConfirmBooking({ onBack, onConfirm, booking }) {
+  const { reason, doctor, date, time } = booking || {};
   return (
     <div className="p-6">
       <div className="max-w-xl">
@@ -10,12 +11,12 @@ export function ConfirmBooking({ onBack, onConfirm }) {
 
         {/* Summary */}
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-soft mb-4">
-          <div className="font-extrabold text-slate-900">Skin Issues Consultation</div>
+          <div className="font-extrabold text-slate-900">{reason || "Consultation"}</div>
           <div className="text-sm text-slate-600">
-            Dr. Mark De Chavez • Dermatologist
+            {doctor?.name || "Doctor"} • {doctor?.specialty || ""}
           </div>
           <div className="text-sm text-slate-600 mt-2">
-            Today • 3:30 PM • Video Call
+            {date || "-"} • {time || "-"} • Video Call
           </div>
         </div>
 

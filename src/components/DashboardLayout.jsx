@@ -13,6 +13,14 @@ const NAV = [
 export default function DashboardLayout({ patient, active, onLogout, children }) {
   const navigate = useNavigate();
 
+  const handleNavigation = (key) => {
+    if (key === "dashboard") {
+      navigate("/patient/dashboard");
+    } else {
+      navigate(`/patient/dashboard/${key}`);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-100">
       <div className="mx-auto max-w-6xl px-4 py-6">
@@ -26,7 +34,7 @@ export default function DashboardLayout({ patient, active, onLogout, children })
                     {patient?.name?.[0] || "P"}
                   </div>
                   <div className="mt-3 font-bold">{patient?.name || "Patient"}</div>
-                  <div className="text-sm text-hf-blue">ID: {patient?.id || "-"}</div>
+                  <div className="text-sm text-hf-blue">ID: {patient?.patientID || "-"}</div>
                 </div>
 
                 <nav className="mt-6 space-y-1">
@@ -35,13 +43,7 @@ export default function DashboardLayout({ patient, active, onLogout, children })
                     return (
                       <button
                         key={item.key}
-                        onClick={() =>
-                          navigate(
-                            item.key === "dashboard"
-                              ? "/patient/dashboard"
-                              : `/patient/dashboard/${item.key}`
-                          )
-                        }
+                        onClick={() => handleNavigation(item.key)}
                         className={
                           "w-full flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-semibold " +
                           (isActive ? "bg-sky-200/70" : "hover:bg-sky-100/60")

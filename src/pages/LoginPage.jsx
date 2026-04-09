@@ -1,27 +1,47 @@
 import React, { useState } from "react";
 import AuthLayout from "../components/AuthLayout.jsx";
-
+import healthLogo from "../assets/logo.png"; 
 export default function LoginPage({ onLogin, onGoRegister }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const submit = (e) => {
+  const submit = async (e) => {
     e.preventDefault();
     setError("");
-    const res = onLogin({ email, password });
+    setLoading(true);
+    const res = await onLogin({ email, password });
+    setLoading(false);
     if (!res?.ok) setError(res?.message || "Login failed.");
   };
 
   return (
     <AuthLayout>
-      <div className="mt-6 text-center">
-        <h1 className="text-3xl font-extrabold tracking-tight text-slate-900">WELCOME TO</h1>
-        <p className="mt-2 text-sm font-semibold text-slate-600">USER LOGIN</p>
+      {/* ✅ Header like your screenshot */}
+      {/* ✅ Header like your screenshot */}
+      <div className="mt-4 text-center space-y-4">
+        <h1 className="text-3xl md:text-4xl tracking-wide text-slate-900">
+          WELCOME TO
+        </h1>
+
+        <div className="flex justify-center">
+          <img
+            src={healthLogo}
+            alt="HealthFirst"
+            className="w-80 md:w-280px] object-contain"
+          />
+        </div>
+
+        <p className="text-base tracking-widest text-slate-800">
+          USER LOGIN
+        </p>
       </div>
 
       <form onSubmit={submit} className="mt-7 mx-auto max-w-sm">
-        <label className="block text-xs font-semibold text-slate-700">Email Address</label>
+        <label className="block text-xs font-semibold text-slate-700">
+          Email Address
+        </label>
         <input
           value={email}
           onChange={(e) => setEmail(e.target.value)}
@@ -31,7 +51,9 @@ export default function LoginPage({ onLogin, onGoRegister }) {
           required
         />
 
-        <label className="mt-4 block text-xs font-semibold text-slate-700">Password</label>
+        <label className="mt-4 block text-xs font-semibold text-slate-700">
+          Password
+        </label>
         <input
           value={password}
           onChange={(e) => setPassword(e.target.value)}
@@ -49,9 +71,10 @@ export default function LoginPage({ onLogin, onGoRegister }) {
 
         <button
           type="submit"
-          className="mt-5 w-full rounded-lg bg-hf-blue px-4 py-2.5 text-sm font-semibold text-white shadow-card hover:bg-hf-blueDark active:translate-y-[1px]"
+          disabled={loading}
+          className="mt-5 w-full rounded-lg bg-hf-blue px-4 py-2.5 text-sm font-semibold text-white shadow-card hover:bg-hf-blueDark active:translate-y-[1px] disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          Continue
+          {loading ? "Logging in..." : "Continue"}
         </button>
 
         <div className="my-3 flex items-center gap-3 text-xs text-slate-500">
@@ -69,15 +92,22 @@ export default function LoginPage({ onLogin, onGoRegister }) {
         </button>
 
         <div className="mt-4 flex items-center justify-center gap-3 text-xs">
-          <a className="text-hf-blue hover:underline" href="#/login" onClick={(e) => e.preventDefault()}>
+          <a
+            className="text-hf-blue hover:underline"
+            href="#/login"
+            onClick={(e) => e.preventDefault()}
+          >
             Forgot Password
           </a>
           <span className="text-slate-400">|</span>
-          <a className="text-hf-blue hover:underline" href="#/login" onClick={(e) => e.preventDefault()}>
+          <a
+            className="text-hf-blue hover:underline"
+            href="#/login"
+            onClick={(e) => e.preventDefault()}
+          >
             Help
           </a>
         </div>
-        
       </form>
     </AuthLayout>
   );

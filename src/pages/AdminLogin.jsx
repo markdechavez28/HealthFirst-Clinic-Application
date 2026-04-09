@@ -1,16 +1,39 @@
 import React, { useState } from "react";
+import { getAdminByEmail } from "../services/doctorService";
 
 const AdminLogin = ({ onLogin }) => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
     setError("");
-    const res = onLogin?.({ email, password });
-    if (!res?.ok) {
-      setError(res?.message || "Login failed.");
+    setLoading(true);
+
+    try {
+      const admin = await getAdminByEmail(email);
+      
+      if (admin && admin.password === password) {
+        const res = onLogin?.({ 
+          email, 
+          password, 
+          adminID: admin.adminID,
+          name: admin.name,
+          role: "admin" 
+        });
+        if (!res?.ok) {
+          setError(res?.message || "Login failed.");
+        }
+      } else {
+        setError("Invalid email or password.");
+      }
+    } catch (err) {
+      console.error("Login error:", err);
+      setError("Login failed. Please try again.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -63,9 +86,10 @@ const AdminLogin = ({ onLogin }) => {
 
           <button
             type="submit"
-            className="w-full rounded-md bg-emerald-700 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-800"
+            disabled={loading}
+            className="w-full rounded-md bg-emerald-700 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Continue
+            {loading ? "Signing in..." : "Continue"}
           </button>
 
           <div className="flex items-center justify-between text-xs">

@@ -5,7 +5,6 @@ import {
   Users,
   Clock,
   LogOut,
-  X,
   ChevronDown,
   ChevronUp,
   Search,
@@ -14,125 +13,161 @@ import {
 } from "lucide-react"
 import { useNavigate } from "react-router-dom"
 import { useEffect, useState } from "react"
+import { getAppointmentsByDoctor, updateAppointmentStatus } from "../services/doctorService"
+import { JitsiMeeting } from "@jitsi/react-sdk"
 
-export default function DoctorVC({ onLogout }) {
+export default function DoctorVC({ doctor, onLogout }) {
   const navigate = useNavigate()
-  const [showZoomModal, setShowZoomModal] = useState(false)
-  const [activeConference, setActiveConference] = useState(null)
+
+  // Dropdown states
   const [showNew, setShowNew] = useState(true)
   const [showOngoing, setShowOngoing] = useState(true)
   const [showConcluded, setShowConcluded] = useState(false)
+
   const [conferences, setConferences] = useState([])
   const [searchTerm, setSearchTerm] = useState("")
-  const [isCallStarted, setIsCallStarted] = useState(false)
+
+  const [roomName, setRoomName] = useState("")
+  const [showMeeting, setShowMeeting] = useState(false)
+  const [activeConference, setActiveConference] = useState(null)
 
   useEffect(() => {
-    // Authentication is handled by route protection
-    
-    loadData()
-    
-    // Listen for storage changes
-    const handleStorageChange = () => {
-      loadData()
-    }
-    
-    window.addEventListener('storage', handleStorageChange)
-    window.addEventListener('dataUpdated', handleStorageChange)
-    
-    return () => {
-      window.removeEventListener('storage', handleStorageChange)
-      window.removeEventListener('dataUpdated', handleStorageChange)
-    }
-  }, [navigate])
-
-  const loadData = () => {
-    const storedConferences = localStorage.getItem('hf_conferences')
-    const initialConferences = [
-      { id: 1, patient: "Jessica Smith", date: "Feb 23, 2026", time: "10:00", reason: "Checkup", status: "Ongoing" },
-      { id: 2, patient: "Sarah Miller", date: "Feb 23, 2026", time: "14:30", reason: "Common Cold", status: "Upcoming" },
-      { id: 3, patient: "Mingyu Kim", date: "Feb 23, 2026", time: "18:00", reason: "Checkup", status: "Upcoming" },
-      { id: 4, patient: "Billie Eilish", date: "Feb 23, 2026", time: "16:00", reason: "Follow-up", status: "Upcoming" }
-    ]
-    
-    if (storedConferences) {
-      const parsed = JSON.parse(storedConferences)
-      // Check if Jessica Smith with Ongoing status exists
-      const hasOngoingJessica = parsed.some(c => c.patient === "Jessica Smith" && c.status === "Ongoing")
-      if (!hasOngoingJessica) {
-        // Reset to initial data if Jessica Smith ongoing is missing
-        localStorage.setItem('hf_conferences', JSON.stringify(initialConferences))
-        setConferences(initialConferences)
-      } else {
-        setConferences(parsed)
+    const load = async () => {
+      if (!doctor?.doctorID) return
+      try {
+        const appts = await getAppointmentsByDoctor(doctor.doctorID)
+        setConferences(appts || [])
+      } catch (e) {
+        console.error(e)
       }
-    } else {
-      localStorage.setItem('hf_conferences', JSON.stringify(initialConferences))
-      setConferences(initialConferences)
     }
-  }
+    load()
+  }, [doctor])
 
   const handleLogout = () => {
-    if (onLogout) {
-      onLogout()
-    } else {
+    if (onLogout) onLogout()
+    else {
       localStorage.removeItem("hf_logged_in")
       navigate("/doctor/login")
     }
   }
 
-  const startCall = () => {
-    setIsCallStarted(true)
-  }
+  // Start Call with Patient. Note:  Only the doctor must login and authenticate Jitsi before starting the call.
+  const handleJoinConference = async (conf) => {
+    const room = `healthfirst-consult-${conf.appointmentID}`
 
-  const markComplete = (id) => {
-    const updatedConferences = conferences.map(c =>
-      c.id === id ? { ...c, status: "Completed" } : c
-    )
-    setConferences(updatedConferences)
-    localStorage.setItem('hf_conferences', JSON.stringify(updatedConferences))
-    
-    setActiveConference(null)
-    setShowZoomModal(false)
-    setIsCallStarted(false)
-    
-    // Notify other components
-    window.dispatchEvent(new Event('dataUpdated'))
-  }
-
-  const ongoingConfs = conferences.filter(c => c.status === "Ongoing")
-  const newConfs = conferences.filter(c => c.status === "Upcoming")
-  const concludedConfs = conferences.filter(c => c.status === "Completed")
-
-  // Filter by search
-  const filteredOngoingConfs = ongoingConfs.filter(c =>
-    c.patient.toLowerCase().includes(searchTerm.toLowerCase())
-  )
-  const filteredNewConfs = newConfs.filter(c =>
-    c.patient.toLowerCase().includes(searchTerm.toLowerCase())
-  )
-  const filteredConcludedConfs = concludedConfs.filter(c =>
-    c.patient.toLowerCase().includes(searchTerm.toLowerCase())
-  )
-
-  const handleJoinConference = (conf) => {
+    setRoomName(room)
     setActiveConference(conf)
-    setShowZoomModal(true)
-    setIsCallStarted(false)
+    setShowMeeting(true)
+
+    try {
+      await updateAppointmentStatus(conf.appointmentID, "ongoing")
+
+      setConferences((prev) =>
+        prev.map((c) =>
+          c.appointmentID === conf.appointmentID
+            ? { ...c, status: "ongoing" }
+            : c
+        )
+      )
+
+      setRoomName(`healthfirst-consult-${conf.appointmentID}`)
+      setActiveConference(conf)
+      setShowMeeting(true)
+    } catch (e) {
+      console.error(e)
+    }
   }
+
+  const markComplete = async (appointmentID) => {
+    try {
+      await updateAppointmentStatus(appointmentID, "completed")
+
+      setConferences((prev) =>
+        prev.map((c) =>
+          c.appointmentID === appointmentID
+            ? { ...c, status: "completed" }
+            : c
+        )
+      )
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  // Fullscreen
+  if (showMeeting && roomName) {
+    return (
+      <div className="fixed inset-0 bg-black z-50 flex flex-col">
+        <div className="bg-[#0f172a] text-white p-4 flex justify-between items-center">
+          <div>
+            <h1 className="font-bold text-lg">HealthFirst Consultation</h1>
+            <p className="text-sm text-gray-400">
+              with {activeConference?.Patient?.name || "Patient"}
+            </p>
+          </div>
+
+          <button
+            onClick={() => {
+              markComplete(activeConference.appointmentID)
+              setShowMeeting(false)
+            }}
+            className="px-6 py-2 bg-red-600 rounded-xl"
+          >
+            End Consultation
+          </button>
+        </div>
+
+        <JitsiMeeting
+          domain="meet.jit.si"
+          roomName={roomName}
+          configOverwrite={{
+            startWithAudioMuted: false,
+            startWithVideoMuted: false,
+            prejoinPageEnabled: false,
+            disableDeepLinking: true,
+          }}
+          userInfo={{
+            displayName: doctor?.name || "Doctor",
+          }}
+          getIFrameRef={(ref) => {
+            ref.style.height = "100%"
+            ref.style.width = "100%"
+          }}
+        />
+      </div>
+    )
+  }
+
+  // FILTERS
+  const ongoing = conferences.filter((c) => c.status === "ongoing")
+  const upcoming = conferences.filter((c) => c.status === "upcoming")
+  const completed = conferences.filter((c) => c.status === "completed")
+
+  const filterBySearch = (list) =>
+    list.filter((c) =>
+      (c.Patient?.name || "")
+        .toLowerCase()
+        .includes(searchTerm.toLowerCase())
+    )
 
   return (
-    <div className="min-h-screen flex bg-[#F2F2F2] font-hammersmith">
+    <div className="min-h-screen flex bg-[#f2f2f2] font-hammersmith">
 
-      {/* SIDEBAR */}
-      <aside className="w-64 bg-navblue p-6 flex flex-col shadow-[0_20px_20px_rgba(0,0,0,0.30)]">
+      {/* Sidebar */}
+      <aside className="w-64 bg-hf-sidebar p-6 flex flex-col">
         <div className="flex justify-center mb-6">
           <img src="/hf-logo.png" className="h-[40px]" />
         </div>
 
         <div className="flex flex-col items-center mb-8">
-          <img src="/doctor.jpg" className="w-20 h-20 rounded-full border-2 border-lightgreen" />
-          <h2 className="text-xl mt-3 font-semibold">Dr. Sam Chua</h2>
-          <p className="text-sm text-txtblue">Pediatrician</p>
+          <img src="/doctor.jpg" className="w-20 h-20 rounded-full" />
+          <h2 className="text-xl mt-3 font-semibold">
+            Dr. {doctor?.name || "Unknown"}
+          </h2>
+          <p className="text-sm text-hf-blue">
+            {doctor?.specialty || ""}
+          </p>
         </div>
 
         <nav className="flex flex-col gap-2">
@@ -145,233 +180,134 @@ export default function DoctorVC({ onLogout }) {
         </nav>
       </aside>
 
-      {/* MAIN */}
+      {/* Main */}
       <main className="flex-1 p-6">
 
-        {/* TOP BAR */}
+        {/* Top */}
         <div className="flex justify-between items-center bg-white rounded-xl px-6 py-3 mb-6 shadow">
-          <h2 className="text-2xl text-txtblue">Video Conference</h2>
-          <div className="relative w-64">
-            <Search size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400"/>
-            <input
-              type="text"
-              placeholder="Search"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-3 pr-4 py-1.5 text-sm border rounded-full focus:outline-none focus:ring-2 focus:ring-bglightblue"
+          <h2 className="text-2xl text-hf-blue">Video Conference</h2>
+
+          <input
+            type="text"
+            placeholder="Search"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="border rounded-full px-4 py-2 w-64"
+          />
+        </div>
+
+        {/* Ongoing */}
+        <Section
+          title="Ongoing Conferences"
+          open={showOngoing}
+          toggle={() => setShowOngoing(!showOngoing)}
+          data={filterBySearch(ongoing)}
+          empty="No ongoing conferences"
+          render={(c) => (
+            <Card
+              c={c}
+              color="green"
+              button="Rejoin"
+              onClick={() => handleJoinConference(c)}
             />
-          </div>
-        </div>
+          )}
+        />
 
-        <div className="space-y-6 max-w-5xl">
+        {/* New */}
+        <Section
+          title="New Conferences"
+          open={showNew}
+          toggle={() => setShowNew(!showNew)}
+          data={filterBySearch(upcoming)}
+          empty="No new conferences"
+          render={(c) => (
+            <Card
+              c={c}
+              button="Start Conference"
+              onClick={() => handleJoinConference(c)}
+            />
+          )}
+        />
 
-          {/* ONGOING CONFERENCES */}
-          <div className="bg-white rounded-xl shadow">
-            <button
-              onClick={() => setShowOngoing(!showOngoing)}
-              className="w-full flex justify-between items-center px-6 py-4 font-semibold bg-[#F5F5F5] rounded-t-xl"
-            >
-              Ongoing Conferences
-              {showOngoing ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-            </button>
-
-            {showOngoing && (
-              <div className="p-6 space-y-4">
-                {filteredOngoingConfs.length === 0 ? (
-                  <p className="text-center text-txtgray">No ongoing conferences</p>
-                ) : (
-                  filteredOngoingConfs.map(c => (
-                    <div key={c.id} className="flex justify-between items-center bg-green-50 border-2 border-green-500 rounded-lg p-4">
-                      <div>
-                        <p className="font-semibold">{c.patient}</p>
-                        <p className="text-sm text-txtgray">{c.date} · {c.time}</p>
-                        <p className="text-sm text-txtgray">Reason: {c.reason}</p>
-                        <span className="inline-block mt-2 text-green-600 font-semibold text-sm">● In Progress</span>
-                      </div>
-                      <button
-                        onClick={() => handleJoinConference(c)}
-                        className="bg-green-600 text-white px-5 py-2 rounded-lg hover:bg-green-700 transition flex items-center gap-2"
-                      >
-                        <Video size={16} />
-                        Rejoin
-                      </button>
-                    </div>
-                  ))
-                )}
+        {/* Completed */}
+        <Section
+          title="Concluded Conferences"
+          open={showConcluded}
+          toggle={() => setShowConcluded(!showConcluded)}
+          data={filterBySearch(completed)}
+          empty="No concluded conferences"
+          render={(c) => (
+            <div className="flex justify-between border-b pb-2">
+              <div>
+                <p className="font-semibold">{c.Patient?.name}</p>
+                <p className="text-sm text-gray-500">
+                  {c.appointment_date} · {c.time_slot}
+                </p>
               </div>
-            )}
-          </div>
+              <span className="text-green-600 flex items-center gap-1">
+                <Check size={16}/> Completed
+              </span>
+            </div>
+          )}
+        />
 
-          {/* NEW CONFERENCES */}
-          <div className="bg-white rounded-xl shadow">
-            <button
-              onClick={() => setShowNew(!showNew)}
-              className="w-full flex justify-between items-center px-6 py-4 font-semibold bg-[#F5F5F5] rounded-t-xl"
-            >
-              New Conferences
-              {showNew ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-            </button>
-
-            {showNew && (
-              <div className="p-6 space-y-4">
-                {filteredNewConfs.length === 0 ? (
-                  <p className="text-center text-txtgray">No new conferences</p>
-                ) : (
-                  filteredNewConfs.map(c => (
-                    <div key={c.id} className="flex justify-between items-center bg-bglightblue rounded-lg p-4 hover:shadow-md transition">
-                      <div>
-                        <p className="font-semibold">{c.patient}</p>
-                        <p className="text-sm text-txtgray">{c.date} · {c.time}</p>
-                        <p className="text-sm text-txtgray">Reason: {c.reason}</p>
-                      </div>
-                      <button
-                        onClick={() => handleJoinConference(c)}
-                        className="bg-bgdarkblue text-white px-5 py-2 rounded-lg hover:opacity-90 transition flex items-center gap-2"
-                      >
-                        <Play size={16} />
-                        Start Conference
-                      </button>
-                    </div>
-                  ))
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* CONCLUDED */}
-          <div className="bg-white rounded-xl shadow">
-            <button
-              onClick={() => setShowConcluded(!showConcluded)}
-              className="w-full flex justify-between items-center px-6 py-4 font-semibold bg-[#F5F5F5] rounded-t-xl"
-            >
-              Concluded Conferences
-              {showConcluded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-            </button>
-
-            {showConcluded && (
-              <div className="p-6 space-y-4 text-sm">
-                {filteredConcludedConfs.length === 0 ? (
-                  <p className="text-center text-txtgray">No concluded conferences</p>
-                ) : (
-                  filteredConcludedConfs.map(c => (
-                    <div key={c.id} className="flex justify-between items-center border-b pb-3 last:border-b-0">
-                      <div>
-                        <p className="font-semibold">{c.patient}</p>
-                        <p className="text-txtgray">{c.date} · {c.time}</p>
-                        <p className="text-txtgray">Reason: {c.reason}</p>
-                      </div>
-                      <span className="text-green-600 font-semibold flex items-center gap-1">
-                        <Check size={16} />
-                        Completed
-                      </span>
-                    </div>
-                  ))
-                )}
-              </div>
-            )}
-          </div>
-
-        </div>
       </main>
-
-      {/* VIDEO MODAL */}
-      {showZoomModal && activeConference && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl w-[700px] p-6 relative">
-            <button
-              onClick={() => {
-                setShowZoomModal(false)
-                setIsCallStarted(false)
-              }}
-              className="absolute top-4 right-4 text-gray-500 hover:text-black"
-            >
-              <X />
-            </button>
-
-            <h3 className="text-xl font-semibold mb-4">
-              Video Consultation with {activeConference.patient}
-            </h3>
-
-            <div className="mb-4 text-sm text-txtgray">
-              <p><strong>Date:</strong> {activeConference.date}</p>
-              <p><strong>Time:</strong> {activeConference.time}</p>
-              <p><strong>Reason:</strong> {activeConference.reason}</p>
-            </div>
-
-            {/* Video Call Area */}
-            <div className={`border-2 rounded-lg p-10 text-center mb-6 ${
-              isCallStarted 
-                ? "border-green-500 bg-green-50" 
-                : "border-dashed border-gray-300 bg-gray-50"
-            }`}>
-              {isCallStarted ? (
-                <div className="space-y-2">
-                  <Video size={48} className="mx-auto text-green-600" />
-                  <p className="text-lg font-semibold text-green-700">Conference In Progress</p>
-                  <p className="text-sm text-gray-600">Video call simulation active</p>
-                  <p className="text-xs text-gray-500 mt-4">(Zoom SDK placeholder)</p>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  <Video size={48} className="mx-auto text-gray-400" />
-                  <p className="text-sm text-gray-500">Ready to start video conference</p>
-                  <p className="text-xs text-gray-400 mt-4">(Zoom SDK will initialize here)</p>
-                </div>
-              )}
-            </div>
-
-            {/* Action Buttons */}
-            <div className="flex gap-3 justify-end">
-              {!isCallStarted ? (
-                <button
-                  onClick={startCall}
-                  className="bg-bgdarkblue text-white px-6 py-2 rounded-lg hover:opacity-90 transition flex items-center gap-2"
-                >
-                  <Play size={18} />
-                  Start Video Call
-                </button>
-              ) : (
-                <>
-                  <button
-                    onClick={() => {
-                      setShowZoomModal(false)
-                      setIsCallStarted(false)
-                    }}
-                    className="bg-gray-500 text-white px-6 py-2 rounded-lg hover:opacity-90 transition"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={() => markComplete(activeConference.id)}
-                    className="bg-green-500 text-white px-6 py-2 rounded-lg hover:bg-green-600 transition flex items-center gap-2"
-                  >
-                    <Check size={18} />
-                    Mark as Completed
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
     </div>
   )
 }
 
-/* NAV ITEM */
+/* Section */
+function Section({ title, open, toggle, data, empty, render }) {
+  return (
+    <div className="bg-white rounded-xl shadow mb-6">
+      <button onClick={toggle} className="w-full flex justify-between px-6 py-4 font-semibold bg-gray-100">
+        {title}
+        {open ? <ChevronUp size={18}/> : <ChevronDown size={18}/>}
+      </button>
+
+      {open && (
+        <div className="p-6 space-y-4">
+          {data.length === 0 ? (
+            <p className="text-center text-gray-400">{empty}</p>
+          ) : data.map(render)}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/* Card */
+function Card({ c, button, onClick, color }) {
+  return (
+    <div className={`flex justify-between items-center p-4 rounded-lg ${color === "green" ? "bg-green-50 border-2 border-green-500" : "bg-hf-panel"}`}>
+      <div>
+        <p className="font-semibold">{c.Patient?.name}</p>
+        <p className="text-sm text-gray-500">
+          {c.appointment_date} · {c.time_slot}
+        </p>
+      </div>
+
+      <button
+        onClick={onClick}
+        className={`px-5 py-2 rounded-lg text-white ${color === "green" ? "bg-green-600" : "bg-hf-blue"}`}
+      >
+        {button}
+      </button>
+    </div>
+  )
+}
+
+/* Nav */
 function NavItem({ icon, text, onClick, active }) {
   return (
     <button
       onClick={onClick}
-      className={`flex items-center gap-3 px-4 py-2 rounded-lg text-sm transition
-        ${active
-          ? "bg-bgdarkblue text-white shadow"
-          : "text-black hover:bg-bgdarkblue hover:text-white hover:shadow"
-        }`}
+      className={`flex items-center gap-3 px-4 py-2 rounded-lg text-sm ${
+        active ? "bg-hf-blue text-white" : "hover:bg-hf-blue hover:text-white"
+      }`}
     >
       {icon}
-      <span>{text}</span>
+      {text}
     </button>
   )
 }

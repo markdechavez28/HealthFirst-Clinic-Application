@@ -6,11 +6,14 @@ export default function DoctorLogin({ onLogin }) {
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState("")
+  const [loading, setLoading] = useState(false)
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault()
     setError("")
-    const res = onLogin?.({ email, password })
+    setLoading(true)
+    const res = await onLogin?.({ email, password })
+    setLoading(false)
     if (!res?.ok) {
       setError(res?.message || "Invalid credentials")
     }
@@ -80,9 +83,10 @@ export default function DoctorLogin({ onLogin }) {
                 )}
                 <button
                     type="submit"
-                    className="mt-2 mb-4 bg-lightgreen text-white py-1 rounded-lg hover:bg-bgdarkblue"
+                    disabled={loading}
+                    className="mt-2 mb-4 bg-lightgreen text-white py-1 rounded-lg hover:bg-bgdarkblue disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                    Continue
+                    {loading ? "Logging in..." : "Continue"}
                 </button>
                 <div className="flex justify-between text-sm mt-3">
                   <span className="text-txtblue cursor-pointer hover:underline">

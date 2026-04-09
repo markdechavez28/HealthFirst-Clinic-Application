@@ -16,7 +16,14 @@ export default {
           sidebar: "#e7f1f7",
           ink: "#0f172a",
           muted: "#64748b"
-        }
+        },
+        // Flat color names for convenience
+        bgdarkblue: "#2f567e",
+        bglightblue: "#d7e4ef",
+        txtblue: "#3a6898",
+        txtgray: "#64748b",
+        lightgreen: "#2a5a5f",
+        navblue: "#e7f1f7"
       },
       boxShadow: {
         soft: "0 12px 24px rgba(15, 23, 42, 0.14)",

@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
+import { supabase } from "./utils/supabaseClient.js";
+import { createMockAppointmentHistory } from "./services/patientService";
 
 // Patient pages
 import LoginPage from "./pages/LoginPage.jsx";
@@ -15,12 +17,11 @@ import DoctorDashboard from "./pages/DoctorDashboard";
 import DoctorAppts from "./pages/DoctorAppts";
 import DoctorVC from "./pages/DoctorVC";
 import DoctorMySched from "./pages/DoctorMySched";
+import DoctorPatients from "./pages/DoctorPatients";
 
 // Admin pages
 import AdminLogin from "./pages/AdminLogin.jsx";
-import AdminDashboard from "./pages/AdminDashboard.jsx";
 import ManageUser from "./pages/ManageUser.jsx";
-import AdminAppointments from "./pages/AdminAppointments.jsx";
 
 // Home page
 import HomePage from "./pages/HomePage.jsx";
@@ -52,80 +53,95 @@ function setLS(key, value) {
 function PatientRoutes() {
   const navigate = useNavigate();
   const location = useLocation();
-  const [session, setSession] = useState(() => getLS(LS_KEYS.session, { isAuthed: false }));
+  const [session, setSession] = useState(null);
+  const [patient, setPatient] = useState({});
+
+  // keep synced with Supabase auth
+  useEffect(() => {
+    // initial session
+    supabase.auth.getSession().then(({ data }) => setSession(data.session));
+
+    const { data: listener } = supabase.auth.onAuthStateChange((event, sess) => {
+      setSession(sess);
+    });
+    return () => {
+      listener.subscription.unsubscribe();
+    };
+  }, []);
+
+  // load patient profile whenever session changes
+  useEffect(() => {
+    const loadProfile = async () => {
+      if (session?.user) {
+        console.log("Loading patient profile for user ID:", session.user.id);
+        const { data, error } = await supabase
+          .from("Patient")
+          .select("*")
+          .eq("patientID", session.user.id)
+          .single();
+        if (error) {
+          console.error("Error loading patient profile:", error);
+          setPatient({});
+        } else {
+          console.log("Patient profile loaded:", data);
+          setPatient(data || {});
+        }
+      } else {
+        setPatient({});
+      }
+    };
+    loadProfile();
+  }, [session]);
 
   useEffect(() => {
-    if (session.isAuthed && (location.pathname === "/patient/login" || location.pathname === "/patient/register")) {
+    if (session?.user && (location.pathname === "/patient/login" || location.pathname === "/patient/register")) {
       navigate("/patient/dashboard", { replace: true });
     }
-    if (!session.isAuthed && location.pathname.startsWith("/patient/dashboard")) {
+    if (!session?.user && location.pathname.startsWith("/patient/dashboard")) {
       navigate("/patient/login", { replace: true });
     }
   }, [location.pathname, session, navigate]);
 
-  const onLogin = ({ email, password }) => {
-    const auth = getLS(LS_KEYS.auth, null);
-    if (!auth) return { ok: false, message: "No account found." };
-    if (auth.email === email && auth.password === password) {
-      const next = { isAuthed: true };
-      setSession(next);
-      setLS(LS_KEYS.session, next);
-      navigate("/patient/dashboard");
-      return { ok: true };
+  const onLogin = async ({ email, password }) => {
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) return { ok: false, message: error.message };
+    const userId = data.user.id;
+    const { data: patient, error: patientError } = await supabase
+      .from("Patient")
+      .select("patientID")
+      .eq("patientID", userId)
+      .maybeSingle();
+    if (patientError || !patient) {
+      await supabase.auth.signOut();
+      return { ok: false, message: "Invalid credentials." };
     }
-    return { ok: false, message: "Invalid credentials." };
-  };
-
-  const onRegister = (payload) => {
-    setLS(LS_KEYS.auth, { email: payload.email, password: payload.password });
-    
-    // Initialize patient with mock appointment history for recommendation algorithm
-    const patientData = {
-      name: payload.fullName,
-      id: payload.patientId || "0001",
-      appointmentHistory: [
-        {
-          doctorId: "doc1",
-          doctorName: "Dr. Mark De Chavez",
-          specialty: "Dermatologist",
-          date: "2025-12-20",
-          rating: 5,
-          notes: "Skin condition follow-up"
-        },
-        {
-          doctorId: "doc2",
-          doctorName: "Dr. Aaron Bayten",
-          specialty: "Internal Medicine",
-          date: "2025-11-15",
-          rating: 4,
-          notes: "General checkup"
-        },
-        {
-          doctorId: "doc1",
-          doctorName: "Dr. Mark De Chavez",
-          specialty: "Dermatologist",
-          date: "2025-10-10",
-          rating: 5,
-          notes: "Initial consultation"
-        }
-      ]
-    };
-    
-    setLS(LS_KEYS.patient, patientData);
-    const next = { isAuthed: true };
-    setSession(next);
-    setLS(LS_KEYS.session, next);
     navigate("/patient/dashboard");
     return { ok: true };
   };
 
-  const onLogout = () => {
-    setSession({ isAuthed: false });
-    setLS(LS_KEYS.session, { isAuthed: false });
-    navigate("/patient/login");
+  const onRegister = async ({ fullName, email, contactNumber, password }) => {
+    const { data, error } = await supabase.auth.signUp({ email, password });
+    if (error) return { ok: false, message: error.message };
+    const userId = data.user?.id;
+    if (userId) {
+      const { error: err2 } = await supabase.from("Patient").insert({
+        patientID: userId,
+        name: fullName,
+        email,
+        contact_num: contactNumber,
+      });
+      if (err2) return { ok: false, message: err2.message };
+      // Create mock appointment history to seed recommendations
+      await createMockAppointmentHistory(userId);
+    }
+    // Return success without navigating - let RegisterPage handle the redirect
+    return { ok: true };
   };
 
-  const patient = useMemo(() => getLS(LS_KEYS.patient, {}), [session]);
+  const onLogout = async () => {
+    await supabase.auth.signOut();
+    navigate("/patient/login");
+  };
 
   return (
     <Routes>
@@ -144,63 +160,90 @@ function PatientRoutes() {
 function DoctorRoutes() {
   const navigate = useNavigate();
   const location = useLocation();
-  const [session, setSession] = useState(() => getLS(LS_KEYS.doctorSession, { isAuthed: false }));
+  const [session, setSession] = useState(null);
+  const [doctor, setDoctor] = useState({});
+
+  // sync with Supabase auth
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => setSession(data.session));
+    const { data: listener } = supabase.auth.onAuthStateChange((event, sess) => {
+      setSession(sess);
+    });
+    return () => listener.subscription.unsubscribe();
+  }, []);
+
+  // load doctor profile whenever session changes
+  useEffect(() => {
+    const loadProfile = async () => {
+      if (session?.user) {
+        console.log("Loading doctor profile for user ID:", session.user.id);
+        const { data, error } = await supabase
+          .from("Doctor")
+          .select("*")
+          .eq("doctorID", session.user.id)
+          .single();
+        if (error) {
+          console.error("Error loading doctor profile:", error);
+          setDoctor({});
+        } else {
+          console.log("Doctor profile loaded:", data);
+          setDoctor(data || {});
+        }
+      } else {
+        setDoctor({});
+      }
+    };
+    loadProfile();
+  }, [session]);
 
   useEffect(() => {
-    if (session.isAuthed && location.pathname === "/doctor/login") {
+    if (session?.user && location.pathname === "/doctor/login") {
       navigate("/doctor/dashboard", { replace: true });
     }
-    if (!session.isAuthed && location.pathname.startsWith("/doctor/dashboard")) {
+    if (!session?.user && location.pathname.startsWith("/doctor/dashboard")) {
       navigate("/doctor/login", { replace: true });
     }
-    if (!session.isAuthed && location.pathname.startsWith("/doctor/appointments")) {
+    if (!session?.user && location.pathname.startsWith("/doctor/appointments")) {
       navigate("/doctor/login", { replace: true });
     }
-    if (!session.isAuthed && location.pathname.startsWith("/doctor/vc")) {
+    if (!session?.user && location.pathname.startsWith("/doctor/vc")) {
       navigate("/doctor/login", { replace: true });
     }
-    if (!session.isAuthed && location.pathname.startsWith("/doctor/schedule")) {
+    if (!session?.user && location.pathname.startsWith("/doctor/schedule")) {
       navigate("/doctor/login", { replace: true });
     }
   }, [location.pathname, session, navigate]);
 
-  const onLogin = ({ email, password }) => {
-    // Default doctor/health professional credentials
-    if (email === "doctor@hf.com" && password === "password") {
-      const next = { isAuthed: true };
-      setSession(next);
-      setLS(LS_KEYS.doctorSession, next);
-      setLS(LS_KEYS.doctor, { email, password, role: "doctor" });
-      navigate("/doctor/dashboard");
-      return { ok: true };
+  const onLogin = async ({ email, password }) => {
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) return { ok: false, message: error.message };
+    const userId = data.user.id;
+    const { data: doctor, error: doctorError } = await supabase
+      .from("Doctor")
+      .select("doctorID")
+      .eq("doctorID", userId)
+      .maybeSingle();
+    if (doctorError || !doctor) {
+      await supabase.auth.signOut();
+      return { ok: false, message: "Invalid credentials." };
     }
-    
-    // Check stored doctor credentials
-    const doctor = getLS(LS_KEYS.doctor, null);
-    if (doctor && doctor.email === email && doctor.password === password) {
-      const next = { isAuthed: true };
-      setSession(next);
-      setLS(LS_KEYS.doctorSession, next);
-      navigate("/doctor/dashboard");
-      return { ok: true };
-    }
-    
-    return { ok: false, message: "Invalid credentials." };
+    navigate("/doctor/dashboard");
+    return { ok: true };
   };
 
-  const onLogout = () => {
-    setSession({ isAuthed: false });
-    setLS(LS_KEYS.doctorSession, { isAuthed: false });
+  const onLogout = async () => {
+    await supabase.auth.signOut();
     navigate("/doctor/login");
   };
 
   return (
     <Routes>
       <Route path="login" element={<DoctorLogin onLogin={onLogin} />} />
-      <Route path="dashboard" element={<DoctorDashboard onLogout={onLogout} />} />
-      <Route path="appointments" element={<DoctorAppts onLogout={onLogout} />} />
-      <Route path="vc" element={<DoctorVC onLogout={onLogout} />} />
-      <Route path="schedule" element={<DoctorMySched onLogout={onLogout} />} />
+      <Route path="dashboard" element={<DoctorDashboard doctor={doctor} onLogout={onLogout} />} />
+      <Route path="appointments" element={<DoctorAppts doctor={doctor} onLogout={onLogout} />} />
+      <Route path="vc" element={<DoctorVC doctor={doctor} onLogout={onLogout} />} />
+      <Route path="schedule" element={<DoctorMySched doctor={doctor} onLogout={onLogout} />} />
+      <Route path="patients" element={<DoctorPatients doctor={doctor} onLogout={onLogout} />} />
       <Route path="" element={<Navigate to="/doctor/login" replace />} />
     </Routes>
   );
@@ -210,62 +253,38 @@ function DoctorRoutes() {
 function AdminRoutes() {
   const navigate = useNavigate();
   const location = useLocation();
-  const [session, setSession] = useState(() => getLS(LS_KEYS.adminSession, { isAuthed: false }));
+  const [session, setSession] = useState(() => getLS(LS_KEYS.adminSession, { isAuthed: false, admin: null }));
 
   useEffect(() => {
     if (session.isAuthed && location.pathname === "/admin/login") {
-      navigate("/admin/dashboard", { replace: true });
+      navigate("/admin/manage", { replace: true });
     }
-    if (
-      !session.isAuthed &&
-      (
-        location.pathname.startsWith("/admin/manage") ||
-        location.pathname.startsWith("/admin/dashboard") ||
-        location.pathname.startsWith("/admin/appointments")
-      )
-    ) {
+    if (!session.isAuthed && location.pathname.startsWith("/admin/manage")) {
       navigate("/admin/login", { replace: true });
     }
   }, [location.pathname, session, navigate]);
 
-  const onLogin = ({ email, password }) => {
-    // Simple admin authentication - in production, this would check against a backend
-    // Default admin credentials for demo
-    if (email === "admin@healthfirst.com" && password === "admin123") {
-      const next = { isAuthed: true };
-      setSession(next);
-      setLS(LS_KEYS.adminSession, next);
-      setLS(LS_KEYS.admin, { email, password, role: "admin" });
-      navigate("/admin/dashboard");
-      return { ok: true };
-    }
-    
-    // Check stored admin credentials
-    const admin = getLS(LS_KEYS.admin, null);
-    if (admin && admin.email === email && admin.password === password) {
-      const next = { isAuthed: true };
-      setSession(next);
-      setLS(LS_KEYS.adminSession, next);
-      navigate("/admin/dashboard");
-      return { ok: true };
-    }
-    
-    return { ok: false, message: "Invalid credentials." };
+  const onLogin = (adminData) => {
+    // AdminLogin component now handles database authentication
+    // Just store the session and admin data
+    const next = { isAuthed: true, admin: adminData };
+    setSession(next);
+    setLS(LS_KEYS.adminSession, next);
+    setLS(LS_KEYS.admin, adminData);
+    navigate("/admin/manage");
+    return { ok: true };
   };
 
   const onLogout = () => {
-    setSession({ isAuthed: false });
-    setLS(LS_KEYS.adminSession, { isAuthed: false });
+    setSession({ isAuthed: false, admin: null });
+    setLS(LS_KEYS.adminSession, { isAuthed: false, admin: null });
     navigate("/admin/login");
   };
 
   return (
     <Routes>
       <Route path="login" element={<AdminLogin onLogin={onLogin} />} />
-      <Route path="dashboard" element={<AdminDashboard onLogout={onLogout} />} />
-      <Route path="manage-user-account" element={<ManageUser onLogout={onLogout} />} />
-      <Route path="appointments" element={<AdminAppointments onLogout={onLogout} />} />
-      <Route path="manage" element={<Navigate to="/admin/manage-user-account" replace />} />
+      <Route path="manage" element={<ManageUser admin={session.admin} onLogout={onLogout} />} />
       <Route path="" element={<Navigate to="/admin/login" replace />} />
     </Routes>
   );
