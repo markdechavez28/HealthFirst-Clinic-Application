@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { NavLink } from "react-router-dom";
-import { supabase } from "../utils/supabaseClient";
+import { supabase, supabaseDoctor } from "../utils/supabaseClient";
 import { Plus, Edit2, Trash2, Search, Loader, X, AlertCircle } from "lucide-react";
 
 const ManageUser = ({ admin, onLogout }) => {
@@ -145,34 +145,40 @@ const ManageUser = ({ admin, onLogout }) => {
     
     try {
       if (modalMode === "add") {
-        // Create auth user
+        // Create doctor auth account using the doctor auth client.
+        // The anon browser client cannot call auth.admin.createUser.
         const tempPassword = Math.random().toString(36).slice(-12);
         
-        const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+        const { data: authData, error: authError } = await supabaseDoctor.auth.signUp({
           email: formData.email,
           password: tempPassword,
-          email_confirm: true,
         });
         
         if (authError) throw authError;
+        if (!authData.user?.id) {
+          throw new Error("Doctor account was created without a user id. Check Supabase auth settings.");
+        }
         
         // Create doctor profile
         const { error: profileError } = await supabase
           .from("Doctor")
           .insert([
             {
-              userID: authData.user.id,
+              doctorID: authData.user.id,
               name: formData.name,
               email: formData.email,
               contact_num: formData.contact_num,
               specialty: formData.specialty,
-              createdAt: new Date().toISOString(),
+              date_created: new Date().toISOString().slice(0, 10),
             },
           ]);
         
         if (profileError) throw profileError;
+
+        // Prevent the admin browser from retaining a doctor auth session.
+        await supabaseDoctor.auth.signOut();
         
-        alert(`Doctor created successfully!\nTemporary Password: ${tempPassword}`);
+        alert(`Doctor created successfully!\nTemporary Password: ${tempPassword}\n\nIf email confirmation is enabled in Supabase, the doctor must verify their email before logging in.`);
         loadDoctors();
       } else {
         // Update doctor profile
