@@ -42,6 +42,14 @@ export default function NotificationContainer() {
           <div className="flex-shrink-0 pt-0.5">{getIcon(notification.type)}</div>
           <div className="flex-1">
             <p className="text-base leading-snug">{notification.message}</p>
+            {notification.actionLabel && typeof notification.onAction === "function" && (
+              <button
+                onClick={notification.onAction}
+                className="mt-3 inline-flex items-center rounded-md border border-current px-3 py-1.5 text-sm font-semibold hover:bg-white/60 transition"
+              >
+                {notification.actionLabel}
+              </button>
+            )}
           </div>
           <button
             onClick={() => removeNotification(notification.id)}
