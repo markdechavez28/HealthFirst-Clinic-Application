@@ -78,6 +78,17 @@ export async function getUpcomingAppointment(patientID) {
 export async function createAppointment({ patientID, doctorID, appointment_date, time_slot, status = "upcoming" }) {
   console.log(`[BOOKING] Creating appointment - patientID=${patientID}, doctorID=${doctorID}, date=${appointment_date}, time=${time_slot}`);
   
+  // Validate that the appointment is not in the past
+  const now = new Date();
+  const appointmentDateTime = new Date(`${appointment_date}T${time_slot}`);
+  
+  if (appointmentDateTime <= now) {
+    console.error(`[BOOKING ERROR] Cannot book appointment in the past. Requested: ${appointmentDateTime}, Current: ${now}`);
+    throw new Error(
+      `Cannot book an appointment for a time that has already passed. Please select a future date and time.`
+    );
+  }
+  
   const { data, error } = await supabase
     .from("Appointment")
     .insert({ patientID, doctorID, appointment_date, time_slot, status })

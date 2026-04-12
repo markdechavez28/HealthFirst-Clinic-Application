@@ -30,6 +30,29 @@ export function ChooseTime({ onNext, onBack, selectedDate, setSelectedDate, sele
     return slots;
   };
 
+  // Check if a time slot has already passed
+  const isTimeSlotPassed = (date, time) => {
+    const today = new Date();
+    const selectedDateObj = new Date(date);
+    
+    // If date is before today, all times are passed
+    if (selectedDateObj.toDateString() < today.toDateString()) {
+      return true;
+    }
+    
+    // If date is today, check if time has passed
+    if (selectedDateObj.toDateString() === today.toDateString()) {
+      const [hours, minutes] = time.split(':').map(Number);
+      const slotTime = new Date(today);
+      slotTime.setHours(hours, minutes, 0, 0);
+      
+      return slotTime <= today;
+    }
+    
+    // Future dates, time hasn't passed
+    return false;
+  };
+
   const availableDates = generateDates();
   const availableSlots = generate30MinuteSlots();
 
@@ -109,25 +132,34 @@ export function ChooseTime({ onNext, onBack, selectedDate, setSelectedDate, sele
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 mb-4">
-            {availableSlots.map((slot) => (
-              <button
-                key={slot}
-                onClick={() => {
-                  setTimeInput(slot);
-                  if (selectedDate) {
-                    setSelectedTime(slot);
-                  }
-                }}
-                disabled={!selectedDate}
-                className={`px-3 py-2 rounded-lg font-semibold text-sm transition ${
-                  selectedTime === slot
-                    ? 'bg-hf-blue text-white border border-hf-blue'
-                    : 'bg-white border border-slate-200 text-slate-700 hover:border-hf-blue hover:bg-blue-50'
-                } ${!selectedDate ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
-              >
-                {slot}
-              </button>
-            ))}
+            {availableSlots.map((slot) => {
+              const isDisabled = !selectedDate || isTimeSlotPassed(selectedDate, slot);
+              
+              return (
+                <button
+                  key={slot}
+                  onClick={() => {
+                    if (!isDisabled) {
+                      setTimeInput(slot);
+                      if (selectedDate) {
+                        setSelectedTime(slot);
+                      }
+                    }
+                  }}
+                  disabled={isDisabled}
+                  title={isDisabled && selectedDate && isTimeSlotPassed(selectedDate, slot) ? "This time has already passed" : ""}
+                  className={`px-3 py-2 rounded-lg font-semibold text-sm transition ${
+                    selectedTime === slot && !isDisabled
+                      ? 'bg-hf-blue text-white border border-hf-blue'
+                      : isDisabled
+                      ? 'bg-gray-100 border border-gray-200 text-gray-400 cursor-not-allowed opacity-50'
+                      : 'bg-white border border-slate-200 text-slate-700 hover:border-hf-blue hover:bg-blue-50 cursor-pointer'
+                  }`}
+                >
+                  {slot}
+                </button>
+              );
+            })}
           </div>
 
           {selectedDate && !selectedTime && (

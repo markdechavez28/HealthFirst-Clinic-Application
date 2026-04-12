@@ -414,6 +414,9 @@ export default function App() {
           {/* ROOT HANDLER - Always show home page */}
           <Route path="/" element={<HomePage />} />
 
+          {/* Public Pages - Accessible to all */}
+          <Route path="/terms-and-services" element={<TermsAndServices />} />
+
           {/* Patient Routes */}
           <Route path="/patient/*" element={<PatientRoutes />} />
 

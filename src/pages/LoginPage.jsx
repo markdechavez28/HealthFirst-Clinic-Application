@@ -1,7 +1,9 @@
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import AuthLayout from "../components/AuthLayout.jsx";
 import healthLogo from "../assets/logo.png"; 
 export default function LoginPage({ onLogin, onGoRegister }) {
+  const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -109,13 +111,21 @@ export default function LoginPage({ onLogin, onGoRegister }) {
           Sign Up
         </button>
 
-        <div className="mt-4 flex items-center justify-center gap-3 text-xs">
+        <div className="mt-4 flex items-center justify-center gap-4 text-xs">
           <button
             type="button"
             onClick={() => setShowResetModal(true)}
             className="text-hf-blue hover:underline cursor-pointer"
           >
             Forgot Password
+          </button>
+          <span className="text-slate-300">|</span>
+          <button
+            type="button"
+            onClick={() => navigate("/terms-and-services")}
+            className="text-hf-blue hover:underline cursor-pointer"
+          >
+            Terms & Services
           </button>
         </div>
       </form>

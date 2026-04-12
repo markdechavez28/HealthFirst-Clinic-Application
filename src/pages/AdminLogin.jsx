@@ -1,11 +1,17 @@
 import React, { useState } from "react";
 import { getAdminByEmail } from "../services/doctorService";
+import { AlertCircle, CheckCircle } from "lucide-react";
 
 const AdminLogin = ({ onLogin }) => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  
+  // Forgot password state
+  const [showResetModal, setShowResetModal] = useState(false);
+  const [resetEmail, setResetEmail] = useState("");
+  const [resetSent, setResetSent] = useState(false);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -35,6 +41,22 @@ const AdminLogin = ({ onLogin }) => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handlePasswordReset = (e) => {
+    e.preventDefault();
+    if (!resetEmail.trim()) {
+      alert("Please enter your email address");
+      return;
+    }
+    console.log(`[FORGOT PASSWORD] Sending reset email to ${resetEmail}`);
+    setResetSent(true);
+    // Auto-reset after 4 seconds
+    setTimeout(() => {
+      setResetSent(false);
+      setResetEmail("");
+      setShowResetModal(false);
+    }, 4000);
   };
 
   return (
@@ -92,16 +114,75 @@ const AdminLogin = ({ onLogin }) => {
             {loading ? "Signing in..." : "Continue"}
           </button>
 
-          <div className="flex items-center justify-between text-xs">
-            <a href="#" className="text-blue-700 hover:underline">
+          <div className="flex items-center justify-center text-xs">
+            <button
+              type="button"
+              onClick={() => setShowResetModal(true)}
+              className="text-hf-blue hover:underline cursor-pointer"
+            >
               Forgot Password?
-            </a>
-            <a href="#" className="text-blue-700 hover:underline">
-              Help
-            </a>
+            </button>
           </div>
         </form>
       </div>
+
+      {/* Password Reset Modal */}
+      {showResetModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-lg p-6 w-96 max-w-sm">
+            {!resetSent ? (
+              <>
+                <h2 className="text-lg font-semibold text-slate-900 mb-3">
+                  Reset Password
+                </h2>
+                <p className="text-sm text-slate-600 mb-4">
+                  Enter your email address and we'll send you a link to reset your password.
+                </p>
+                <form onSubmit={handlePasswordReset}>
+                  <input
+                    type="email"
+                    value={resetEmail}
+                    onChange={(e) => setResetEmail(e.target.value)}
+                    placeholder="Enter your email"
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-hf-blue/40 focus:border-hf-blue mb-4"
+                    required
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowResetModal(false)}
+                      className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold hover:bg-slate-50"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="flex-1 rounded-lg bg-hf-blue px-3 py-2 text-sm font-semibold text-white hover:bg-bgdarkblue"
+                    >
+                      Send Reset Link
+                    </button>
+                  </div>
+                </form>
+              </>
+            ) : (
+              <div className="text-center">
+                <div className="flex justify-center mb-4">
+                  <CheckCircle className="w-12 h-12 text-green-600" />
+                </div>
+                <h3 className="text-lg font-semibold text-slate-900 mb-2">
+                  Email Sent
+                </h3>
+                <p className="text-sm text-slate-600">
+                  Password reset link has been sent to <strong>{resetEmail}</strong>
+                </p>
+                <p className="text-xs text-slate-500 mt-4">
+                  The modal will close automatically in a few seconds...
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </main>
   );
 };

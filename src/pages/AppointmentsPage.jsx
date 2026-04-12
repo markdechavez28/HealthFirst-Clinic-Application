@@ -451,29 +451,13 @@ export function AppointmentsPage({ patient }) {
                     </div>
                   </div>
                 )}
-                {!loadingRecs && selectedDate && selectedTime && (
+                {!loadingRecs && recommendedDoctors.length > 0 && filteredDoctors.length > 0 && (
                   <div className="mb-6">
-                    {/* Show recommended doctors that are available for the selected time */}
+                    {/* Only show recommended doctors that are actually available for the selected time */}
                     {(() => {
                       const availableRecommendedDoctors = recommendedDoctors.filter(
                         (recDoctor) => filteredDoctors.some(fd => fd.doctorID === recDoctor.doctorID)
                       );
-                      const unavailableRecommendedDoctors = recommendedDoctors.filter(
-                        (recDoctor) => !filteredDoctors.some(fd => fd.doctorID === recDoctor.doctorID)
-                      );
-                      
-                      if (availableRecommendedDoctors.length === 0 && unavailableRecommendedDoctors.length > 0) {
-                        return (
-                          <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg mb-4">
-                            <p className="text-sm font-semibold text-yellow-900">
-                              ⚠️ None of your recommended specialists are available at {selectedTime} on this date
-                            </p>
-                            <p className="text-xs text-yellow-800 mt-1">
-                              Below are other available doctors for this time slot
-                            </p>
-                          </div>
-                        );
-                      }
                       
                       if (availableRecommendedDoctors.length === 0) {
                         return null;

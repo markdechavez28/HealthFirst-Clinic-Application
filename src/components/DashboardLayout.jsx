@@ -10,6 +10,7 @@ const NAV = [
   { key: "appointments", label: "Book Appointments", icon: "calendar" },
   { key: "video", label: "Online Consultations", icon: "video" },
   { key: "logs", label: "Consultation Log", icon: "clock" },
+  { key: "terms", label: "Refund Policy", icon: "info" },
 ];
 
 export default function DashboardLayout({ patient, active, onLogout, children }) {
@@ -20,6 +21,8 @@ export default function DashboardLayout({ patient, active, onLogout, children })
   const handleNavigation = (key) => {
     if (key === "dashboard") {
       navigate("/patient/dashboard");
+    } else if (key === "terms") {
+      navigate("/terms-and-services");
     } else {
       navigate(`/patient/dashboard/${key}`);
     }

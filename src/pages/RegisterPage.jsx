@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import AuthLayout from "../components/AuthLayout.jsx";
 
 function validatePassword(pw) {
@@ -41,6 +42,7 @@ function formatContactNumber(input) {
 }
 
 export default function RegisterPage({ onRegister, onGoLogin }) {
+  const navigate = useNavigate();
   const [firstName, setFirstName] = useState("");
   const [middleName, setMiddleName] = useState("");
   const [surname, setSurname] = useState("");
@@ -219,7 +221,15 @@ export default function RegisterPage({ onRegister, onGoLogin }) {
         </button>
 
         <p className="mt-6 text-center text-[11px] text-slate-500">
-          By creating an account, you agree to HealthFirst’s Terms & Privacy Policy.
+          By creating an account, you agree to HealthFirst's{" "}
+          <button
+            type="button"
+            onClick={() => navigate("/terms-and-services")}
+            className="text-hf-blue hover:underline font-semibold"
+          >
+            Terms & Privacy Policy
+          </button>
+          .
         </p>
       </form>
     </AuthLayout>
