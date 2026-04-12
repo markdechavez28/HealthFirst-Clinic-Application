@@ -5,6 +5,7 @@ import {
   Users,
   Clock,
   LogOut,
+  Lock,
   ChevronDown,
   ChevronUp,
   Play,
@@ -12,7 +13,8 @@ import {
 } from "lucide-react"
 import { useNavigate } from "react-router-dom"
 import { useEffect, useState } from "react"
-import { getAppointmentsByDoctor, updateAppointmentStatus, checkAndUpdateExpiredAppointments, cancelAppointmentForDoctor } from "../services/doctorService"
+import { getAppointmentsByDoctor, updateAppointmentStatus, checkAndUpdateExpiredAppointments, cancelAppointmentForDoctor, updateDoctorPassword } from "../services/doctorService"
+import ChangePasswordDialog from "../components/ChangePasswordDialog"
 import { supabaseDoctor as supabase } from "../utils/supabaseClient"
 import { JitsiMeeting } from "@jitsi/react-sdk"
 import { MeetingEndDialog } from "../components/MeetingEndDialog"
@@ -33,6 +35,8 @@ export default function DoctorVC({ doctor, onLogout }) {
   const [activeConference, setActiveConference] = useState(null)
   const [showEndDialog, setShowEndDialog] = useState(false)
   const [cancellationLogs, setCancellationLogs] = useState([])
+  const [showChangePasswordDialog, setShowChangePasswordDialog] = useState(false)
+  const [changePasswordLoading, setChangePasswordLoading] = useState(false)
 
   useEffect(() => {
     const load = async () => {
@@ -63,6 +67,20 @@ export default function DoctorVC({ doctor, onLogout }) {
     else {
       localStorage.removeItem("hf_logged_in")
       navigate("/doctor/login")
+    }
+  }
+
+  const handleChangePassword = async (currentPassword, newPassword) => {
+    setChangePasswordLoading(true)
+    try {
+      await updateDoctorPassword(currentPassword, newPassword)
+      alert("Password changed successfully!")
+      setShowChangePasswordDialog(false)
+    } catch (error) {
+      console.error("Failed to change password:", error)
+      alert("Failed to change password: " + (error.message || "Unknown error"))
+    } finally {
+      setChangePasswordLoading(false)
     }
   }
 
@@ -226,6 +244,7 @@ export default function DoctorVC({ doctor, onLogout }) {
           <NavItem icon={<Video size={18} />} text="Online Consultations" active />
           <NavItem icon={<Users size={18} />} text="Patient Profile" onClick={() => navigate("/doctor/patients")} />
           <NavItem icon={<Clock size={18} />} text="My Schedule" onClick={() => navigate("/doctor/schedule")} />
+          <NavItem icon={<Lock size={18} />} text="Change Password" onClick={() => setShowChangePasswordDialog(true)} />
           <NavItem icon={<LogOut size={18} />} text="Logout" onClick={handleLogout} />
         </nav>
       </aside>

@@ -5,16 +5,15 @@ import {
   Users,
   Clock,
   LogOut,
-  Edit,
-  Upload,
+  Lock,
   Filter,
   Search,
   X
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
-import { getDoctorPatientProfiles, updatePrescriptionUrl } from "../services/doctorService";
-import { supabaseDoctor as supabase } from "../utils/supabaseClient";
+import { getDoctorPatientProfiles, updateDoctorPassword } from "../services/doctorService";
+import ChangePasswordDialog from "../components/ChangePasswordDialog";
 
 export default function DoctorPatients({ doctor, onLogout }) {
   const navigate = useNavigate();
@@ -24,37 +23,8 @@ export default function DoctorPatients({ doctor, onLogout }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [showFilter, setShowFilter] = useState(false);
   const [activeFilters, setActiveFilters] = useState([]);
-
-  const [showUploadModal, setShowUploadModal] = useState(false);
-  const [showViewModal, setShowViewModal] = useState(false);
-  const [selectedPatient, setSelectedPatient] = useState(null);
-  const [selectedFile, setSelectedFile] = useState(null);
-
-  const [showEditModal, setShowEditModal] = useState(false);
-  // Limiting Filetypes for Prescription Upload
-  const [uploading, setUploading] = useState(false);
-  const handleFileChange = (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-
-  const allowedTypes = ['image/jpeg', 'image/png', 'application/pdf'];
-  if (!allowedTypes.includes(file.type)) {
-    alert('Only JPEG, PNG images and PDF files are allowed.');
-    e.target.value = '';
-    setSelectedFile(null);
-    return;
-  }
-
-  if (file.size > 5 * 1024 * 1024) {
-    alert('File size must be less than 5MB.');
-    e.target.value = '';
-    setSelectedFile(null);
-    return;
-  }
-
-  setSelectedFile(file);
-};
-
+  const [showChangePasswordDialog, setShowChangePasswordDialog] = useState(false);
+  const [changePasswordLoading, setChangePasswordLoading] = useState(false);
   // Fetch patients from database
   useEffect(() => {
     const loadPatients = async () => {
@@ -88,8 +58,6 @@ export default function DoctorPatients({ doctor, onLogout }) {
             allergies: medicalHistory?.allergies || "None",
             additionalDetails: medicalHistory?.additionalDetails || "N/A",
             purpose: "Consultation",
-            prescription: medicalHistory?.prescription_url ? medicalHistory.prescription_url.split('/').pop() : "",
-            prescriptionUrl: medicalHistory?.prescription_url || null,
             status: "completed",
           };
         });
@@ -105,11 +73,6 @@ export default function DoctorPatients({ doctor, onLogout }) {
 
     loadPatients();
   }, [doctor]);
-
-  const savePatients = (updated) => {
-    setPatients(updated);
-    localStorage.setItem("hf_patients", JSON.stringify(updated));
-  };
 
   const filterOptions = [
     "Female",
@@ -144,94 +107,25 @@ export default function DoctorPatients({ doctor, onLogout }) {
     return searchMatch && genderMatch;
   });
 
-const handleUpload = async () => {
-  if (!selectedFile || !selectedPatient) return;
-
-  setUploading(true);
-  try {
-    const fileExt = selectedFile.name.split('.').pop();
-    const fileName = `${selectedPatient.id}_${Date.now()}.${fileExt}`;
-    const filePath = `prescriptions/${fileName}`;
-
-    const { error: uploadError } = await supabase.storage
-      .from('prescriptions')
-      .upload(filePath, selectedFile, { cacheControl: '3600' });
-
-    if (uploadError) throw uploadError;
-
-    const { data: urlData } = supabase.storage
-      .from('prescriptions')
-      .getPublicUrl(filePath);
-    const publicUrl = urlData.publicUrl;
-
-    await updatePrescriptionUrl(selectedPatient.id, publicUrl);
-    
-    const updated = patients.map(p =>
-      p.id === selectedPatient.id
-        ? { 
-            ...p, 
-            prescription: selectedFile.name,   // filename for UI
-            fileObject: selectedFile,          // keep for local preview
-            prescriptionUrl: publicUrl         // store the actual URL
-          }
-        : p
-    );
-    savePatients(updated);
-
-    setShowUploadModal(false);
-    setSelectedFile(null);
-    alert('File uploaded!');
-  } catch (error) {
-    console.error('Upload failed:', error.message);
-    alert('Upload failed: ' + error.message);
-  } finally {
-    setUploading(false);
-  }
-};
-
-  const handleView = (p) => {
-    if (p.prescriptionUrl) {
-      setSelectedPatient(p);
-      setShowViewModal(true);
-    } else if (p.fileObject) {
-      setSelectedPatient(p);
-      setShowViewModal(true);
-    } else {
-      alert('No file');
-    }
-  };
-
-  const handleDeletePrescription = async (p) => {
-    if (!confirm('Delete this prescription?')) return;
-
-    try {
-      if (p.prescriptionUrl) {
-        const filePath = p.prescriptionUrl.split('/').slice(-2).join('/');
-        const { error: storageError } = await supabase.storage
-          .from('prescriptions')
-          .remove([filePath]);
-        if (storageError) throw storageError;
-
-        // Clear URL in database
-        await updatePrescriptionUrl(p.id, null);
-      }
-
-      const updated = patients.map(pt =>
-        pt.id === p.id ? { ...pt, prescription: "", fileObject: null, prescriptionUrl: null } : pt
-      );
-      setPatients(updated);
-      alert('Prescription deleted');
-    } catch (error) {
-      console.error('Delete failed:', error.message);
-      alert('Delete failed');
-    }
-  };
-
   const handleLogout = () => {
     if (onLogout) onLogout();
     else {
       localStorage.removeItem("hf_logged_in");
       navigate("/doctor/login");
+    }
+  };
+
+  const handleChangePassword = async (currentPassword, newPassword) => {
+    setChangePasswordLoading(true);
+    try {
+      await updateDoctorPassword(currentPassword, newPassword);
+      alert("Password changed successfully!");
+      setShowChangePasswordDialog(false);
+    } catch (error) {
+      console.error("Failed to change password:", error);
+      alert("Failed to change password: " + (error.message || "Unknown error"));
+    } finally {
+      setChangePasswordLoading(false);
     }
   };
 
@@ -254,6 +148,7 @@ const handleUpload = async () => {
           <NavItem icon={<Video size={18} />} text="Online Consultations" to="/doctor/vc" />
           <NavItem icon={<Users size={18} />} text="Patient Profile" to="/doctor/patients" />
           <NavItem icon={<Clock size={18} />} text="My Schedule" to="/doctor/schedule" />
+          <NavItem icon={<Lock size={18} />} text="Change Password" onClick={() => setShowChangePasswordDialog(true)} />
           <NavItem icon={<LogOut size={18} />} text="Logout" onClick={handleLogout} />
         </nav>
       </aside>
@@ -335,77 +230,18 @@ const handleUpload = async () => {
                     <p><strong>Additional Details:</strong> {p.additionalDetails}</p>
                   )}
                 </div>
-
-                <div className="mt-3">
-                  <p className="text-sm font-semibold">e-Prescription</p>
-
-                  {p.prescription ? (
-                    <button
-                      onClick={() => handleView(p)}
-                      className="text-green-600 text-xs underline flex items-center gap-1"
-                    >
-                      View: {p.prescription}
-                    </button>
-                  ) : (
-                    <p className="text-xs text-gray-400">No file</p>
-                  )}
-
-                  <div className="flex gap-2 mt-2">
-                    <button
-                      onClick={() => { setSelectedPatient(p); setShowUploadModal(true); }}
-                      className="bg-[#3e68a3] text-white px-2 py-1 text-xs rounded flex items-center gap-1"
-                    >
-                      <Upload size={12}/> Upload
-                    </button>
-
-                    {p.prescription && (
-                      <button
-                        onClick={() => handleDeletePrescription(p)}
-                        className="bg-yellow-400 px-2 py-1 text-xs rounded flex items-center gap-1"
-                      >
-                        <Edit size={12}/> Delete
-                      </button>
-                    )}
-                  </div>
-                </div>
               </div>
             ))
           )}
         </div>
       </main>
 
-      {showUploadModal && (
-        <Modal onClose={() => setShowUploadModal(false)} title="Upload Prescription">
-          <input type="file" accept="image/jpeg,image/png,application/pdf" onChange={handleFileChange} />
-          <button onClick={handleUpload} disabled={uploading} className="mt-3 bg-[#3e68a3] text-white px-4 py-2 rounded">
-            {uploading ? 'Uploading...' : 'Save'}
-          </button>
-        </Modal>
-      )}
-
-      {showViewModal && selectedPatient && (
-        <Modal onClose={() => setShowViewModal(false)} title={`Viewing: ${selectedPatient.prescription}`}>
-          {selectedPatient.prescriptionUrl ? (
-            selectedPatient.prescriptionUrl.endsWith('.pdf') ? (
-              <iframe src={selectedPatient.prescriptionUrl} className="w-full h-64" title="PDF" />
-            ) : (
-              <img src={selectedPatient.prescriptionUrl} className="w-full max-h-64 object-contain" alt="Prescription" />
-            )
-          ) : selectedPatient.fileObject ? (
-            selectedPatient.fileObject.type === "application/pdf" ? (
-              <iframe src={URL.createObjectURL(selectedPatient.fileObject)} className="w-full h-64" />
-            ) : (
-              <img src={URL.createObjectURL(selectedPatient.fileObject)} className="w-full max-h-64 object-contain" />
-            )
-          ) : (
-            <p>No file to display</p>
-          )}
-        </Modal>
-      )}
-
-      {showEditModal && (
-        <Modal onClose={() => setShowEditModal(false)} title="Edit Patient" />
-      )}
+      <ChangePasswordDialog
+        isOpen={showChangePasswordDialog}
+        onClose={() => setShowChangePasswordDialog(false)}
+        onSubmit={handleChangePassword}
+        loading={changePasswordLoading}
+      />
 
     </div>
   );

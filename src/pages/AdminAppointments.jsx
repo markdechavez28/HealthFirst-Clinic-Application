@@ -188,7 +188,6 @@ const AdminAppointments = ({ onLogout }) => {
                           <th className="px-4 py-3 font-semibold">Type</th>
                           <th className="px-4 py-3 font-semibold">Schedule</th>
                           <th className="px-4 py-3 font-semibold">Status</th>
-                          <th className="px-4 py-3 font-semibold">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-200">
@@ -217,23 +216,6 @@ const AdminAppointments = ({ onLogout }) => {
                               <span className={`rounded-full px-3 py-1 text-xs font-semibold ${getStatusColor(appt.status)}`}>
                                 {getStatusBadgeText(appt.status)}
                               </span>
-                            </td>
-                            <td className="px-4 py-3">
-                              <div className="flex flex-wrap gap-2">
-                                <button className="rounded-md border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition">
-                                  View
-                                </button>
-                                {["upcoming", "ongoing"].includes(appt.status) && (
-                                  <button className="rounded-md border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition">
-                                    Reschedule
-                                  </button>
-                                )}
-                                {!["completed", "unattended"].includes(appt.status) && (
-                                  <button className="rounded-md border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-50 transition">
-                                    Cancel
-                                  </button>
-                                )}
-                              </div>
                             </td>
                           </tr>
                         ))}

@@ -7,6 +7,7 @@ import {
   Users,
   Clock,
   LogOut,
+  Lock,
   Plus,
   Trash2
 } from "lucide-react";
@@ -378,6 +379,20 @@ export default function DoctorMySched({ doctor, onLogout }) {
       localStorage.removeItem("hf_logged_in");
       navigate("/doctor/login");
     }
+  }
+
+  const handleChangePassword = async (currentPassword, newPassword) => {
+    setChangePasswordLoading(true)
+    try {
+      await updateDoctorPassword(currentPassword, newPassword)
+      alert("Password changed successfully!")
+      setShowChangePasswordDialog(false)
+    } catch (error) {
+      console.error("Failed to change password:", error)
+      alert("Failed to change password: " + (error.message || "Unknown error"))
+    } finally {
+      setChangePasswordLoading(false)
+    }
   };
 
   const handleWithdrawSchedule = async (submittedScheduleID) => {
@@ -470,6 +485,7 @@ export default function DoctorMySched({ doctor, onLogout }) {
           <NavItem icon={<Video size={18} />} text="Online Consultations" onClick={() => navigate("/doctor/vc")} />
           <NavItem icon={<Users size={18} />} text="Patient Profile" onClick={() => navigate("/doctor/patients")} />
           <NavItem icon={<Clock size={18} />} text="My Schedule" active />
+          <NavItem icon={<Lock size={18} />} text="Change Password" onClick={() => setShowChangePasswordDialog(true)} />
           <NavItem icon={<LogOut size={18} />} text="Logout" onClick={handleLogout} />
         </nav>
       </aside>
