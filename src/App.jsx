@@ -2,6 +2,10 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import { supabasePatient, supabaseDoctor } from "./utils/supabaseClient.js";
 import { createMockAppointmentHistory } from "./services/patientService";
+import {
+  isAllowedPatientSignupEmail,
+  patientSignupEmailErrorMessage,
+} from "./utils/patientEmailDomains.js";
 import { NotificationProvider } from "./context/NotificationContext";
 import NotificationContainer from "./components/NotificationContainer";
 
@@ -147,6 +151,9 @@ function PatientRoutes() {
   };
 
   const onRegister = async ({ fullName, email, contactNumber, password }) => {
+    if (!isAllowedPatientSignupEmail(email)) {
+      return { ok: false, message: patientSignupEmailErrorMessage() };
+    }
     const { data, error } = await supabasePatient.auth.signUp({ email, password });
     if (error) return { ok: false, message: error.message };
     const userId = data.user?.id;

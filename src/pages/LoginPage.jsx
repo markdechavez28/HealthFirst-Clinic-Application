@@ -67,7 +67,8 @@ export default function LoginPage({ onLogin, onGoRegister }) {
           onChange={(e) => setEmail(e.target.value)}
           className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-hf-blue/40 focus:border-hf-blue"
           type="email"
-          placeholder="you@email.com"
+          placeholder="you@gmail.com"
+          autoComplete="email"
           required
         />
 
