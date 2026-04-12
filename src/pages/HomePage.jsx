@@ -20,21 +20,21 @@ export default function HomePage() {
       description: "Access your appointments, consultations, and health records",
       route: "/patient/login",
       color: "bg-hf-blue hover:bg-hf-blueDark",
-      icon: "•"
+      icon: ""
     },
     {
       title: "Health Professional",
       description: "Manage appointments, consultations, and patient care",
       route: "/doctor/login",
       color: "bg-emerald-600 hover:bg-emerald-700",
-      icon: "D"
+      icon: ""
     },
     {
       title: "Admin",
       description: "Manage users, appointments, and system settings",
       route: "/admin/login",
       color: "bg-slate-700 hover:bg-slate-800",
-      icon: "*"
+      icon: ""
     }
   ];
 
