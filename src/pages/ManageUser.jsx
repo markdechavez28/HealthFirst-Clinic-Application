@@ -184,7 +184,7 @@ const ManageUser = ({ admin, onLogout }) => {
         addNotification(
           `Doctor created successfully. Temporary password: ${tempPassword}`,
           "success",
-          12000,
+          0,
           {
             actionLabel: "Copy Password",
             onAction: async () => {
