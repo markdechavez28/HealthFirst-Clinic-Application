@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { NavLink } from "react-router-dom";
-import { supabase } from "../utils/supabaseClient";
+import { supabase, supabaseAdmin } from "../utils/supabaseClient";
 import { Plus, Edit2, Trash2, Search, Loader, X, AlertCircle } from "lucide-react";
 
 const ManageUser = ({ admin, onLogout }) => {
@@ -145,10 +145,15 @@ const ManageUser = ({ admin, onLogout }) => {
     
     try {
       if (modalMode === "add") {
+        // Check if admin client is available
+        if (!supabaseAdmin) {
+          throw new Error("Admin credentials not configured. Please set VITE_SUPABASE_SERVICE_ROLE_KEY in your environment.");
+        }
+
         // Create auth user
         const tempPassword = Math.random().toString(36).slice(-12);
         
-        const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+        const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
           email: formData.email,
           password: tempPassword,
           email_confirm: true,

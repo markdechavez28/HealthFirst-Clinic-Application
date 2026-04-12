@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 // Initialize Supabase client
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "https://lbvvikesrysqaqplysgy.supabase.co";
 const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "sb_publishable_z_D5M1BjGNmITvCS3IXOaA_gYE5UOW6";
+const supabaseServiceRoleKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
 
 // Separate clients for patient and doctor to enable simultaneous sessions
 export const supabasePatient = createClient(supabaseUrl, supabaseKey, {
@@ -16,6 +17,9 @@ export const supabaseDoctor = createClient(supabaseUrl, supabaseKey, {
     storageKey: "sb-doctor-auth-token",
   },
 });
+
+// Admin client for privileged operations (uses service role key)
+export const supabaseAdmin = supabaseServiceRoleKey ? createClient(supabaseUrl, supabaseServiceRoleKey) : null;
 
 // Legacy export for backward compatibility
 export const supabase = supabasePatient;
