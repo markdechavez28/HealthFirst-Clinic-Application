@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { isDoctorTimeslotAvailable } from "../services/patientService.js";
 
 export function ConfirmBooking({ onBack, onConfirm, booking, isCheckingAvailability = false }) {
   const { reason, doctor, date, time, price = 600 } = booking || {};
@@ -9,6 +10,63 @@ export function ConfirmBooking({ onBack, onConfirm, booking, isCheckingAvailabil
   const [isProcessing, setIsProcessing] = useState(false);
   const [paymentConfirmed, setPaymentConfirmed] = useState(false);
   const [paymentError, setPaymentError] = useState("");
+  const [slotVerified, setSlotVerified] = useState(false);
+  const [verifyingSlot, setVerifyingSlot] = useState(true);
+  const [slotUnavailable, setSlotUnavailable] = useState(false);
+
+  // Verify slot availability on mount and when booking details change
+  useEffect(() => {
+    const verifySlot = async () => {
+      if (!doctor?.doctorID || !date || !time) {
+        setSlotUnavailable(true);
+        setVerifyingSlot(false);
+        return;
+      }
+
+      try {
+        setVerifyingSlot(true);
+        
+        // Convert date format if needed
+        let apptDate = date;
+        const today = new Date();
+        const localIso = (d) => {
+          const t = new Date(d);
+          const y = t.getFullYear();
+          const m = String(t.getMonth() + 1).padStart(2, "0");
+          const dd = String(t.getDate()).padStart(2, "0");
+          return `${y}-${m}-${dd}`;
+        };
+        
+        if (apptDate === "Today") apptDate = localIso(today);
+        if (apptDate === "Tomorrow") {
+          const t = new Date(today);
+          t.setDate(t.getDate() + 1);
+          apptDate = localIso(t);
+        }
+
+        console.log(`[CONFIRM BOOKING] Verifying slot: doctor=${doctor.doctorID}, date=${apptDate}, time=${time}`);
+        const available = await isDoctorTimeslotAvailable(doctor.doctorID, apptDate, time);
+        
+        if (available) {
+          console.log(`[CONFIRM BOOKING] ✅ Slot confirmed as available`);
+          setSlotVerified(true);
+          setSlotUnavailable(false);
+        } else {
+          console.error(`[CONFIRM BOOKING] ❌ Slot is no longer available`);
+          setSlotUnavailable(true);
+          setSlotVerified(false);
+        }
+      } catch (error) {
+        console.error(`[CONFIRM BOOKING] Error verifying slot:`, error);
+        setSlotUnavailable(true);
+        setSlotVerified(false);
+      } finally {
+        setVerifyingSlot(false);
+      }
+    };
+
+    verifySlot();
+  }, [doctor, date, time]);
 
   // Format phone number input for GCash and Maya
   const formatPhoneNumber = (value) => {
@@ -91,13 +149,50 @@ export function ConfirmBooking({ onBack, onConfirm, booking, isCheckingAvailabil
           Confirm Booking & Payment
         </h2>
 
+        {/* Verifying Slot Status */}
+        {verifyingSlot && (
+          <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 mb-4 flex items-center gap-3">
+            <div className="inline-block animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+            <div>
+              <p className="text-sm font-semibold text-blue-900">Verifying Slot Availability</p>
+              <p className="text-xs text-blue-700">Confirming the time slot is still available...</p>
+            </div>
+          </div>
+        )}
+
+        {/* Slot Verified - Green Banner */}
+        {slotVerified && !verifyingSlot && (
+          <div className="rounded-lg border border-green-200 bg-green-50 p-4 mb-4 flex items-center gap-3">
+            <div className="flex items-center justify-center w-6 h-6 rounded-full bg-green-500 flex-shrink-0">
+              <span className="text-white font-bold text-sm">✓</span>
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-green-900">Time slot confirmed as available</p>
+              <p className="text-xs text-green-700">Your appointment slot is reserved. Proceed to payment.</p>
+            </div>
+          </div>
+        )}
+
+        {/* Slot Unavailable - Red Banner */}
+        {slotUnavailable && !verifyingSlot && (
+          <div className="rounded-lg border border-red-300 bg-red-50 p-4 mb-4 flex items-center gap-3">
+            <div className="flex items-center justify-center w-6 h-6 rounded-full bg-red-500 flex-shrink-0">
+              <span className="text-white font-bold text-sm">✕</span>
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-red-900">Time slot is no longer available</p>
+              <p className="text-xs text-red-700 mt-1">Another patient just booked this slot. Please go back and select a different time or doctor.</p>
+            </div>
+          </div>
+        )}
+
         {/* Checking Availability Status */}
         {isCheckingAvailability && (
           <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 mb-4 flex items-center gap-3">
             <div className="inline-block animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
             <div>
-              <p className="text-sm font-semibold text-blue-900">Verifying Slot Availability</p>
-              <p className="text-xs text-blue-700">Making sure the time slot is still available...</p>
+              <p className="text-sm font-semibold text-blue-900">Processing Booking</p>
+              <p className="text-xs text-blue-700">Finalizing your appointment...</p>
             </div>
           </div>
         )}
@@ -162,7 +257,7 @@ export function ConfirmBooking({ onBack, onConfirm, booking, isCheckingAvailabil
         )}
 
         {/* Payment */}
-        {!paymentConfirmed ? (
+        {!paymentConfirmed && slotVerified ? (
           <div className="border border-slate-200 bg-white p-5 mb-6" style={{boxShadow: "0 1px 3px rgba(15, 23, 42, 0.08)"}}>
             <div className="text-sm font-extrabold text-slate-900 mb-3">Payment Method</div>
             
@@ -276,22 +371,43 @@ export function ConfirmBooking({ onBack, onConfirm, booking, isCheckingAvailabil
               </div>
             )}
           </div>
+        ) : !paymentConfirmed && slotUnavailable ? (
+          <div className="border border-red-200 bg-red-50 p-5 mb-6 rounded-lg">
+            <p className="text-sm font-semibold text-red-900">
+              ❌ Payment not available - Slot is no longer available
+            </p>
+            <p className="text-xs text-red-700 mt-2">
+              Please go back and select a different date, time, or doctor.
+            </p>
+          </div>
+        ) : !paymentConfirmed ? (
+          <div className="border border-blue-200 bg-blue-50 p-5 mb-6 rounded-lg flex items-center gap-3">
+            <div className="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+            <p className="text-sm font-semibold text-blue-900">Checking availability...</p>
+          </div>
         ) : null}
 
         <div className="flex gap-3">
           <button
             onClick={onBack}
-            disabled={isProcessing || paymentConfirmed || isCheckingAvailability}
-            className="w-full rounded-lg border border-slate-200 bg-white py-3 font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+            disabled={isProcessing || paymentConfirmed || isCheckingAvailability || slotUnavailable}
+            className="w-full rounded-lg border border-slate-200 bg-white py-3 font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             ← Back
           </button>
           <button
             onClick={handlePaymentSubmit}
-            disabled={!selectedPaymentMethod || isProcessing || isCheckingAvailability}
-            className="w-full rounded-lg bg-hf-blue py-3 font-bold text-white hover:bg-blue-700 disabled:opacity-50"
+            disabled={!selectedPaymentMethod || isProcessing || isCheckingAvailability || slotUnavailable || verifyingSlot || !slotVerified}
+            className="w-full rounded-lg bg-hf-blue py-3 font-bold text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isCheckingAvailability ? (
+            {verifyingSlot ? (
+              <span className="flex items-center justify-center gap-2">
+                <div className="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                Verifying Slot...
+              </span>
+            ) : slotUnavailable ? (
+              "Slot Unavailable"
+            ) : isCheckingAvailability ? (
               <span className="flex items-center justify-center gap-2">
                 <div className="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
                 Verifying...

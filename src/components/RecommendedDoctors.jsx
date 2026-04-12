@@ -4,6 +4,7 @@ import { Icon } from "./Icon.jsx";
 /**
  * RecommendedDoctors Component
  * Displays a list of recommended doctors based on appointment history
+ * NOTE: If availableDoctorIds is provided, ONLY available doctors are shown (unavailable ones are hidden completely)
  */
 export function RecommendedDoctors({
   doctors = [],
@@ -11,7 +12,12 @@ export function RecommendedDoctors({
   compact = false,
   availableDoctorIds = [],
 }) {
-  if (!doctors || doctors.length === 0) {
+  // Filter doctors to show only available ones if availableDoctorIds is provided
+  const displayDoctors = availableDoctorIds.length > 0
+    ? doctors.filter(doctor => availableDoctorIds.includes(doctor.doctorID))
+    : doctors;
+
+  if (!displayDoctors || displayDoctors.length === 0) {
     return null;
   }
 
@@ -21,28 +27,19 @@ export function RecommendedDoctors({
       <div className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-sky-50 rounded-lg border border-blue-100">
         <div className="flex items-center gap-2 mb-3">
           <span className="text-sm font-semibold text-slate-700">
-            Recommended practitioners
+            <span className="text-emerald-600">✓</span> Recommended practitioners available at this time
           </span>
         </div>
         <div className="flex gap-2 overflow-x-auto pb-2">
-          {doctors.map((doctor) => {
-            const isAvailable = availableDoctorIds.includes(doctor.doctorID);
-            return (
-              <button
-                key={doctor.id}
-                onClick={() => isAvailable && onSelectDoctor && onSelectDoctor(doctor)}
-                disabled={!isAvailable}
-                className={`flex-shrink-0 px-4 py-2 rounded-lg border-2 font-semibold transition whitespace-nowrap ${
-                  isAvailable
-                    ? "border-hf-blue text-hf-blue bg-white hover:bg-hf-blue hover:text-white cursor-pointer"
-                    : "border-slate-300 text-slate-400 bg-slate-100 cursor-not-allowed"
-                }`}
-              >
-                {doctor.name.split(" ").pop()}
-                {!isAvailable && " (Unavailable)"}
-              </button>
-            );
-          })}
+          {displayDoctors.map((doctor) => (
+            <button
+              key={doctor.id}
+              onClick={() => onSelectDoctor && onSelectDoctor(doctor)}
+              className="flex-shrink-0 px-4 py-2 rounded-lg border-2 border-hf-blue text-hf-blue bg-white hover:bg-hf-blue hover:text-white cursor-pointer font-semibold transition whitespace-nowrap"
+            >
+              {doctor.name.split(" ").pop()}
+            </button>
+          ))}
         </div>
       </div>
     );
