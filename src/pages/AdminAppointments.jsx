@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { NavLink } from "react-router-dom";
 import { supabasePatient as supabase } from "../utils/supabaseClient";
-import { Loader } from "lucide-react";
+import { Loader, ArrowUpDown } from "lucide-react";
 
 const AdminAppointments = ({ onLogout }) => {
   const [appointments, setAppointments] = useState([]);
@@ -9,6 +9,8 @@ const AdminAppointments = ({ onLogout }) => {
   const [loading, setLoading] = useState(true);
   const [cancellationLoading, setCancellationLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [sortBy, setSortBy] = useState("date-desc");
+  const [filterDoctor, setFilterDoctor] = useState("");
 
   useEffect(() => {
     const fetchAppointments = async () => {
@@ -62,15 +64,31 @@ const AdminAppointments = ({ onLogout }) => {
     fetchCancellationLogs();
   }, []);
 
+  const VALID_STATUS_VALUES = [
+    "ongoing",
+    "upcoming",
+    "patient_no_show",
+    "unattended_by_doctor",
+    "completed"
+  ];
+
   const getStatusColor = (status) => {
-    switch (status?.toLowerCase()) {
+    const normalizedStatus = status?.toLowerCase().trim();
+    
+    // Map database values to normalized statuses
+    let mappedStatus = normalizedStatus;
+    if (normalizedStatus === "unattended_by_patient") {
+      mappedStatus = "patient_no_show";
+    }
+
+    switch (mappedStatus) {
       case "upcoming":
         return "bg-blue-100 text-blue-700";
       case "ongoing":
         return "bg-green-100 text-green-700";
       case "completed":
         return "bg-gray-100 text-gray-700";
-      case "unattended_by_patient":
+      case "patient_no_show":
         return "bg-orange-100 text-orange-700";
       case "unattended_by_doctor":
         return "bg-red-100 text-red-700";
@@ -80,11 +98,55 @@ const AdminAppointments = ({ onLogout }) => {
   };
 
   const getStatusBadgeText = (status) => {
-    switch (status?.toLowerCase()) {
-      case "unattended_by_patient": return "Patient No-Show";
-      case "unattended_by_doctor": return "Unconfirmed";
-      default: return status?.charAt(0).toUpperCase() + status?.slice(1);
+    const normalizedStatus = status?.toLowerCase().trim();
+
+    // Map database values to display values
+    const statusMap = {
+      "upcoming": "Upcoming",
+      "ongoing": "Ongoing",
+      "completed": "Completed",
+      "patient_no_show": "Patient No-Show",
+      "unattended_by_patient": "Patient No-Show",
+      "unattended_by_doctor": "Unattended by Doctor"
+    };
+
+    return statusMap[normalizedStatus] || "Unknown Status";
+  };
+
+  // Get unique doctors for filter dropdown
+  const uniqueDoctors = Array.from(
+    new Map(
+      appointments.map((appt) => [appt.doctorID, appt.Doctor])
+    ).values()
+  ).sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+
+  // Filter and sort appointments
+  const getProcessedAppointments = () => {
+    let filtered = appointments;
+
+    // Apply doctor filter
+    if (filterDoctor) {
+      filtered = filtered.filter((appt) => appt.doctorID === filterDoctor);
     }
+
+    // Apply sorting
+    const sorted = [...filtered].sort((a, b) => {
+      const dateA = new Date(`${a.appointment_date} ${a.time_slot}`);
+      const dateB = new Date(`${b.appointment_date} ${b.time_slot}`);
+
+      if (sortBy === "date-asc") {
+        return dateA - dateB;
+      } else if (sortBy === "date-desc") {
+        return dateB - dateA;
+      } else if (sortBy === "time-asc") {
+        return a.time_slot.localeCompare(b.time_slot);
+      } else if (sortBy === "time-desc") {
+        return b.time_slot.localeCompare(a.time_slot);
+      }
+      return 0;
+    });
+
+    return sorted;
   };
 
   return (
@@ -171,11 +233,56 @@ const AdminAppointments = ({ onLogout }) => {
           ) : (
             <>
               <section className="overflow-hidden rounded-lg border border-slate-200">
-                <div className="bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700">
-                  Appointments ({appointments.length})
+                <div className="bg-slate-50 px-4 py-4 border-b border-slate-200">
+                  <div className="flex flex-col gap-4">
+                    <div className="flex items-center justify-between">
+                      <h2 className="text-sm font-semibold text-slate-700">
+                        Appointments ({getProcessedAppointments().length})
+                      </h2>
+                    </div>
+                    
+                    {/* Filter and Sort Controls */}
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                      {/* Doctor Filter */}
+                      <div className="flex-1">
+                        <label className="block text-xs font-semibold text-slate-600 mb-2">
+                          Filter by Doctor
+                        </label>
+                        <select
+                          value={filterDoctor}
+                          onChange={(e) => setFilterDoctor(e.target.value)}
+                          className="w-full px-3 py-2 text-sm rounded-md border border-slate-300 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                        >
+                          <option value="">All Doctors</option>
+                          {uniqueDoctors.map((doctor) => (
+                            <option key={doctor.doctorID} value={doctor.doctorID}>
+                              Dr. {doctor.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Sort Options */}
+                      <div className="flex-1">
+                        <label className="block text-xs font-semibold text-slate-600 mb-2">
+                          Sort by
+                        </label>
+                        <select
+                          value={sortBy}
+                          onChange={(e) => setSortBy(e.target.value)}
+                          className="w-full px-3 py-2 text-sm rounded-md border border-slate-300 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                        >
+                          <option value="date-desc">Date (Newest - Oldest)</option>
+                          <option value="date-asc">Date (Oldest - Newest)</option>
+                          <option value="time-desc">Time (Latest - Earliest)</option>
+                          <option value="time-asc">Time (Earliest - Latest)</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
                 </div>
                 <div className="w-full overflow-x-auto">
-                  {appointments.length === 0 ? (
+                  {getProcessedAppointments().length === 0 ? (
                     <div className="px-4 py-8 text-center text-slate-600">
                       No appointments found.
                     </div>
@@ -191,7 +298,7 @@ const AdminAppointments = ({ onLogout }) => {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-200">
-                        {appointments.map((appt) => (
+                        {getProcessedAppointments().map((appt) => (
                           <tr key={appt.appointmentID} className="hover:bg-slate-50">
                             <td className="px-4 py-3">
                               <div>

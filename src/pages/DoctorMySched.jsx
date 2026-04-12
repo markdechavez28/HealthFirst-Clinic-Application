@@ -665,7 +665,7 @@ export default function DoctorMySched({ doctor, onLogout }) {
                                     </span>
                                     {" - "}
                                     <span>
-                                      {maxEnd && startTimes.length > 1
+                                      {maxEnd
                                         ? `${formatTimeDisplay(minStart)} to ${formatTimeDisplay(maxEnd)}`
                                         : formatTimeDisplay(minStart)}
                                     </span>
@@ -741,7 +741,7 @@ export default function DoctorMySched({ doctor, onLogout }) {
                                     </span>
                                     {" - "}
                                     <span>
-                                      {maxEnd && startTimes.length > 1
+                                      {maxEnd
                                         ? `${formatTimeDisplay(minStart)} to ${formatTimeDisplay(maxEnd)}`
                                         : formatTimeDisplay(minStart)}
                                     </span>
@@ -815,7 +815,7 @@ export default function DoctorMySched({ doctor, onLogout }) {
                                     </span>
                                     {" - "}
                                     <span>
-                                      {maxEnd && startTimes.length > 1
+                                      {maxEnd
                                         ? `${formatTimeDisplay(minStart)} to ${formatTimeDisplay(maxEnd)}`
                                         : formatTimeDisplay(minStart)}
                                     </span>
@@ -892,7 +892,7 @@ export default function DoctorMySched({ doctor, onLogout }) {
                                     </span>
                                     {" - "}
                                     <span>
-                                      {maxEnd && startTimes.length > 1
+                                      {maxEnd
                                         ? `${formatTimeDisplay(minStart)} to ${formatTimeDisplay(maxEnd)}`
                                         : formatTimeDisplay(minStart)}
                                     </span>
@@ -978,7 +978,7 @@ export default function DoctorMySched({ doctor, onLogout }) {
                                     </span>
                                     {" - "}
                                     <span>
-                                      {maxEnd && startTimes.length > 1
+                                      {maxEnd
                                         ? `${formatTimeDisplay(minStart)} to ${formatTimeDisplay(maxEnd)}`
                                         : formatTimeDisplay(minStart)}
                                     </span>
