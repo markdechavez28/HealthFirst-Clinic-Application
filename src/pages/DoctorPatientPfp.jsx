@@ -9,6 +9,7 @@ import {
   LogOut
 } from "lucide-react";
 import { getPatientsByDoctor } from "../services/doctorService";
+import DoctorSidebarHomeLink from "../components/DoctorSidebarHomeLink.jsx";
 
 export default function DoctorPatientPfp({ doctor, onLogout }) {
   const navigate = useNavigate();
@@ -40,9 +41,7 @@ export default function DoctorPatientPfp({ doctor, onLogout }) {
     <div className="min-h-screen flex bg-[#f2f2f2] font-hammersmith">
       {/* sidebar */}
       <aside className="w-64 bg-hf-sidebar p-6 flex flex-col" style={{boxShadow: "0 1px 3px rgba(15, 23, 42, 0.08)"}}>
-        <div className="flex justify-center mb-6">
-          <img src="/hf-logo.png" className="h-[40px]" />
-        </div>
+        <DoctorSidebarHomeLink />
         <div className="flex flex-col items-center mb-8">
           <img src="/doctor.jpg" className="w-20 h-20 rounded-full border-2 border-lightgreen" />
           <h2 className="text-xl mt-3 font-semibold">Dr. {doctor?.name || "Unknown"}</h2>
