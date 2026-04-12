@@ -64,6 +64,26 @@ export function PatientDashboard({ patient }) {
     load();
   }, [patient]);
 
+  // Sort appointments by date (most recent first), then by time (latest first for same date)
+  const sortConsultationHistory = (appointments) => {
+    return [...appointments].sort((a, b) => {
+      const dateA = new Date(a.appointment_date);
+      const dateB = new Date(b.appointment_date);
+      
+      // If dates are different, most recent first
+      if (dateA.getTime() !== dateB.getTime()) {
+        return dateB.getTime() - dateA.getTime();
+      }
+      
+      // Same date, so sort by time (later time first)
+      const timeA = a.time_slot ? a.time_slot.split(':').map(Number) : [0, 0];
+      const timeB = b.time_slot ? b.time_slot.split(':').map(Number) : [0, 0];
+      const minutesA = timeA[0] * 60 + timeA[1];
+      const minutesB = timeB[0] * 60 + timeB[1];
+      return minutesB - minutesA; // Later time first
+    });
+  };
+
   // Load consultation history
   useEffect(() => {
     if (!patient?.patientID) return;
@@ -76,7 +96,7 @@ export function PatientDashboard({ patient }) {
         .order("appointment_date", { ascending: false })
         .limit(5);
       
-      setConsultationHistory(data || []);
+      setConsultationHistory(sortConsultationHistory(data || []));
     };
 
     loadConsultationHistory();
