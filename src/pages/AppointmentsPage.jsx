@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { ChooseTime } from "./ChooseTime.jsx";
 import { YourDetails } from "./YourDetails.jsx";
 import { ConfirmBooking } from "./ConfirmBooking.jsx";
@@ -12,17 +13,24 @@ import {
 } from "../services/patientService.js";
 import { getRecommendedDoctorsForPatient } from "../services/recommendationService.js";
 
+// Pricing in pesos
+const APPOINTMENT_PRICING = {
+  "General check-up": 700,
+  default: 600
+};
+
+const getAppointmentPrice = (appointmentType) => {
+  return APPOINTMENT_PRICING[appointmentType] || APPOINTMENT_PRICING.default;
+};
+
 const APPOINTMENT_TYPES = [
   "General check-up",
-  "Follow-up visit",
-  "Eye examination",
   "Skin consultation",
   "Ear, nose, or throat concern",
   "Women's health consultation",
   "Men's health consultation",
   "Child health consultation",
   "Birth control consultation",
-  "Prescription renewal",
   "Laboratory test request",
   "Medical certificate / clearance",
   "Travel health consultation",
@@ -34,17 +42,6 @@ const APPOINTMENT_TYPE_DOCTORS = {
     { name: "Alexandra Jimenez", specialty: "Family Medicine", isBest: true },
     { name: "Nathaniel Oclinaria", specialty: "Preventive Medicine", isBest: false },
     { name: "Aaron Bayten", specialty: "Internal Medicine", isBest: false },
-  ],
-  "Follow-up visit": [
-    { name: "Alexandra Jimenez", specialty: "Family Medicine", isBest: true },
-    { name: "Aaron Bayten", specialty: "Internal Medicine", isBest: false },
-    { name: "Nathaniel Oclinaria", specialty: "Preventive Medicine", isBest: false },
-    { name: "Mark De Chavez", specialty: "Dermatologist", isBest: false },
-  ],
-  "Eye examination": [
-    { name: "Angela Samboa", specialty: "Ophthalmologist", isBest: true },
-    { name: "Alexandra Jimenez", specialty: "Family Medicine", isBest: false },
-    { name: "Nathaniel Oclinaria", specialty: "Preventive Medicine", isBest: false },
   ],
   "Skin consultation": [
     { name: "Mark De Chavez", specialty: "Dermatologist", isBest: true },
@@ -81,12 +78,6 @@ const APPOINTMENT_TYPE_DOCTORS = {
     { name: "Alexandra Jimenez", specialty: "Family Medicine", isBest: false },
     { name: "Nathaniel Oclinaria", specialty: "Preventive Medicine", isBest: false },
   ],
-  "Prescription renewal": [
-    { name: "Nathaniel Oclinaria", specialty: "Preventive Medicine", isBest: true },
-    { name: "Alexandra Jimenez", specialty: "Family Medicine", isBest: false },
-    { name: "Aaron Bayten", specialty: "Internal Medicine", isBest: false },
-    { name: "Josh Allen Lee", specialty: "ENT Specialist", isBest: false },
-  ],
   "Laboratory test request": [
     { name: "Aaron Bayten", specialty: "Internal Medicine", isBest: true },
     { name: "Nathaniel Oclinaria", specialty: "Preventive Medicine", isBest: false },
@@ -105,6 +96,7 @@ const APPOINTMENT_TYPE_DOCTORS = {
 };
 
 export function AppointmentsPage({ patient }) {
+  const navigate = useNavigate();
   const [step, setStep] = useState(1);
   const [selectedReason, setSelectedReason] = useState(null);
   const [selectedDoctor, setSelectedDoctor] = useState(null);
@@ -187,10 +179,13 @@ export function AppointmentsPage({ patient }) {
           apptDate = localIso(t);
         }
 
+        console.log(`[FILTERING DOCTORS] Checking availability for date=${apptDate}, time=${selectedTime}, doctors=${filtered.length}`);
+
         const availabilityChecks = await Promise.all(
           filtered.map(async (doctor) => {
             try {
               const available = await isDoctorTimeslotAvailable(doctor.doctorID, apptDate, selectedTime);
+              console.log(`  [DOCTOR] ${doctor.name}: ${available ? 'AVAILABLE' : 'UNAVAILABLE'}`);
               return { doctor, available };
             } catch (e) {
               console.error(`Error checking availability for ${doctor.name}:`, e);
@@ -202,6 +197,8 @@ export function AppointmentsPage({ patient }) {
         filtered = availabilityChecks
           .filter(({ available }) => available)
           .map(({ doctor }) => doctor);
+
+        console.log(`[FILTER RESULT] ${filtered.length} doctors available after slot checks`);
 
         if (filtered.length === 0) {
           setNoDoctorsAvailable(true);
@@ -246,6 +243,26 @@ export function AppointmentsPage({ patient }) {
       setError("Missing information");
       return;
     }
+
+    // Validate medical details before confirming booking
+    const heightNum = parseFloat(details.height);
+    const weightNum = parseFloat(details.weight);
+
+    if (!details.height || heightNum <= 0 || heightNum < 50 || heightNum > 300) {
+      setError("Please provide a valid height (50-300 cm)");
+      setStep(3);
+      return;
+    }
+
+    if (!details.weight || weightNum <= 0 || weightNum < 2 || weightNum > 500) {
+      setError("Please provide a valid weight (2-500 kg)");
+      setStep(3);
+      return;
+    }
+    
+    // Start verification
+    setCheckingAvailability(true);
+    
     try {
       const localIso = (d) => {
         const t = new Date(d);
@@ -263,6 +280,13 @@ export function AppointmentsPage({ patient }) {
         apptDate = localIso(t);
       }
 
+      console.log(`[BOOKING WORKFLOW] Starting booking process...`);
+      console.log(`[BOOKING WORKFLOW] Patient: ${patient.patientID}`);
+      console.log(`[BOOKING WORKFLOW] Doctor: ${selectedDoctor.name} (${selectedDoctor.doctorID})`);
+      console.log(`[BOOKING WORKFLOW] Date: ${apptDate}, Time: ${selectedTime}`);
+      
+      // Final verification before booking - check one more time to prevent race conditions
+      console.log(`[BOOKING WORKFLOW] Step 1: Verifying slot availability...`);
       const slotAvailable = await isDoctorTimeslotAvailable(
         selectedDoctor.doctorID,
         apptDate,
@@ -270,54 +294,66 @@ export function AppointmentsPage({ patient }) {
       );
 
       if (!slotAvailable) {
-        setError("The chosen date and time is not available for this doctor. Please select another slot.");
+        const msg = "This time slot is no longer available. Another patient just booked it. Please select a different time or doctor.";
+        console.error(`[BOOKING WORKFLOW] FAILED: ${msg}`);
+        setError(msg);
+        setCheckingAvailability(false);
         return;
       }
+      
+      console.log(`[BOOKING WORKFLOW] Slot verified as available`);
+      console.log(`[BOOKING WORKFLOW] Step 2: Saving medical history...`);
 
-      await saveMedicalHistory({
-        patientID: patient.patientID,
-        height: details.height,
-        weight: details.weight,
-        bloodPressure: details.bloodPressure,
-        temperature: details.temperature,
-        pastIllness: details.pastIllness,
-        previousSurgery: details.previousSurgery,
-        allergies: details.allergies,
-        additionalDetails: details.additionalDetails,
-      });
+      // Save medical history first
+      try {
+        await saveMedicalHistory({
+          patientID: patient.patientID,
+          height: details.height,
+          weight: details.weight,
+          bloodPressure: details.bloodPressure,
+          temperature: details.temperature,
+          pastIllness: details.pastIllness,
+          previousSurgery: details.previousSurgery,
+          allergies: details.allergies,
+          additionalDetails: details.additionalDetails,
+        });
+        console.log(`[BOOKING WORKFLOW] Medical history saved`);
+      } catch (medicalErr) {
+        console.error(`[BOOKING WORKFLOW] FAILED - Medical history save error:`, medicalErr);
+        throw new Error(`Failed to save medical information: ${medicalErr.message}`);
+      }
 
-      await createAppointment({
-        patientID: patient.patientID,
-        doctorID: selectedDoctor.doctorID,
-        appointment_date: apptDate,
-        time_slot: selectedTime,
-        status: "pending",
-      });
-      setStep(1);
-      setSelectedReason(null);
-      setSelectedDoctor(null);
-      setSelectedDate(null);
-      setSelectedTime(null);
-      setDetails({});
-      alert("Appointment booked successfully");
+      console.log(`[BOOKING WORKFLOW] Step 3: Creating appointment...`);
+      try {
+        await createAppointment({
+          patientID: patient.patientID,
+          doctorID: selectedDoctor.doctorID,
+          appointment_date: apptDate,
+          time_slot: selectedTime,
+        });
+        console.log(`[BOOKING WORKFLOW] Appointment created successfully`);
+      } catch (appointmentErr) {
+        console.error(`[BOOKING WORKFLOW] Appointment creation failed:`, appointmentErr.message);
+        throw appointmentErr;
+      }
+      
+      console.log(`[BOOKING WORKFLOW] BOOKING COMPLETED SUCCESSFULLY!`);
+      
+      // Redirect to dashboard after successful booking
+      navigate("/patient/dashboard");
     } catch (e) {
-      setError(e.message || "Failed to book appointment");
+      console.error("[BOOKING WORKFLOW] BOOKING FAILED:", e);
+      const errorMsg = e.message || e.toString?.() || "Failed to book appointment. Please try again.";
+      const formattedError = errorMsg;
+      setError(formattedError);
+      setCheckingAvailability(false);
     }
   };
 
   return (
     <div className="p-6">
-      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-3xl font-extrabold text-hf-blue">Appointments</h1>
-        <div className="relative w-full sm:w-[360px]">
-          <input
-            className="w-full rounded-full border border-slate-200 bg-slate-100 px-4 py-2.5 pr-10 text-sm outline-none focus:ring-2 focus:ring-hf-blue/30 focus:border-hf-blue"
-            placeholder="Search"
-          />
-          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500">
-            <Icon name="search" className="w-5 h-5" />
-          </span>
-        </div>
+      <div className="mb-6">
+        <h1 className="text-3xl font-extrabold text-hf-blue">Book Appointments</h1>
       </div>
         
       <div className="mb-6">
@@ -362,7 +398,7 @@ export function AppointmentsPage({ patient }) {
                       setShowSpecialtyWarning(false);
                     }}
                     className={
-                      "rounded-lg px-3 py-2 text-sm font-semibold transition " +
+                      "px-3 py-2 text-sm font-semibold transition " +
                       (selectedReason === r
                         ? "bg-hf-blue text-white"
                         : "bg-sky-100 text-slate-800 hover:bg-sky-200")
@@ -382,9 +418,8 @@ export function AppointmentsPage({ patient }) {
                 <p className="text-sm text-slate-500 mb-4">Choose a practitioner</p>
 
                 {showSpecialtyWarning && (
-                  <div className="mb-4 rounded-lg border border-yellow-300 bg-yellow-50 p-4">
+                  <div className="mb-4 border border-yellow-300 bg-yellow-50 p-4">
                     <div className="flex items-start gap-3">
-                      <span className="text-lg">⚠️</span>
                       <div>
                         <p className="text-sm font-semibold text-yellow-900">{specialtyWarning}</p>
                         <p className="text-xs text-yellow-800 mt-1">
@@ -396,7 +431,7 @@ export function AppointmentsPage({ patient }) {
                 )}
 
                 {checkingAvailability && (
-                  <div className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-sky-50 rounded-lg border border-blue-100">
+                  <div className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-sky-50 border border-blue-100">
                     <div className="flex items-center gap-2">
                       <div className="animate-spin h-4 w-4 rounded-full border-2 border-hf-blue border-t-transparent"></div>
                       <span className="text-sm font-semibold text-slate-700">Checking doctor availability...</span>
@@ -405,9 +440,8 @@ export function AppointmentsPage({ patient }) {
                 )}
                 
                 {noDoctorsAvailable && !checkingAvailability && (
-                  <div className="mb-6 p-4 bg-red-50 rounded-lg border border-red-200">
+                  <div className="mb-6 p-4 bg-red-50 border border-red-200">
                     <div className="flex items-start gap-3">
-                      <span className="text-lg">⚠️</span>
                       <div>
                         <p className="text-sm font-semibold text-red-900">No available doctors on selected date and time</p>
                         <p className="text-xs text-red-800 mt-1">
@@ -417,20 +451,33 @@ export function AppointmentsPage({ patient }) {
                     </div>
                   </div>
                 )}
-                {!loadingRecs && recommendedDoctors.length > 0 && (
+                {!loadingRecs && recommendedDoctors.length > 0 && filteredDoctors.length > 0 && (
                   <div className="mb-6">
-                    <RecommendedDoctors
-                      doctors={recommendedDoctors}
-                      onSelectDoctor={(doctor) => {
-                        // Find the corresponding doctor in filteredDoctors to ensure we select the correct object
-                        const filteredDoctor = filteredDoctors.find(fd => fd.doctorID === doctor.doctorID);
-                        if (filteredDoctor) {
-                          handleSelectDoctor(filteredDoctor);
-                        }
-                      }}
-                      compact={true}
-                      availableDoctorIds={filteredDoctors.map(d => d.doctorID)}
-                    />
+                    {/* Only show recommended doctors that are actually available for the selected time */}
+                    {(() => {
+                      const availableRecommendedDoctors = recommendedDoctors.filter(
+                        (recDoctor) => filteredDoctors.some(fd => fd.doctorID === recDoctor.doctorID)
+                      );
+                      
+                      if (availableRecommendedDoctors.length === 0) {
+                        return null;
+                      }
+                      
+                      return (
+                        <RecommendedDoctors
+                          doctors={availableRecommendedDoctors}
+                          onSelectDoctor={(doctor) => {
+                            // Find the corresponding doctor in filteredDoctors to ensure we select the correct object
+                            const filteredDoctor = filteredDoctors.find(fd => fd.doctorID === doctor.doctorID);
+                            if (filteredDoctor) {
+                              handleSelectDoctor(filteredDoctor);
+                            }
+                          }}
+                          compact={true}
+                          availableDoctorIds={filteredDoctors.map(d => d.doctorID)}
+                        />
+                      );
+                    })()}
                   </div>
                 )}
 
@@ -444,11 +491,12 @@ export function AppointmentsPage({ patient }) {
                         key={d.doctorID}
                         onClick={() => handleSelectDoctor(d)}
                         className={
-                          "rounded-xl border bg-white p-4 shadow-soft text-left transition " +
+                          "border bg-white p-4 text-left transition " +
                           (isSelected ? "border-hf-blue bg-sky-50" : 
                            isBest ? "border-emerald-300 hover:bg-emerald-50" :
                            "border-slate-200 hover:bg-slate-50")
                         }
+                        style={{boxShadow: "0 1px 3px rgba(15, 23, 42, 0.08)"}}
                       >
                         <div className="flex items-start gap-3">
                           <div className="h-12 w-12 rounded-full bg-slate-200 flex items-center justify-center">
@@ -488,14 +536,14 @@ export function AppointmentsPage({ patient }) {
                       setStep(1);
                       setNoDoctorsAvailable(false);
                     }}
-                    className="flex-1 rounded-lg border-2 border-slate-300 hover:border-slate-400 py-3 font-bold text-slate-700"
+                    className="flex-1 border-2 border-slate-300 hover:border-slate-400 py-3 font-bold text-slate-700"
                   >
                     ← Back
                   </button>
                   <button
                     disabled={!selectedReason || !selectedDoctor || noDoctorsAvailable}
                     onClick={() => setStep(3)}
-                    className="flex-1 rounded-lg bg-hf-blue py-3 font-bold text-white disabled:opacity-40"
+                    className="flex-1 bg-hf-blue py-3 font-bold text-white disabled:opacity-40"
                   >
                     Continue →
                   </button>
@@ -533,7 +581,9 @@ export function AppointmentsPage({ patient }) {
             doctor: selectedDoctor,
             date: selectedDate,
             time: selectedTime,
+            price: getAppointmentPrice(selectedReason),
           }}
+          isCheckingAvailability={checkingAvailability}
         />
       )}
 

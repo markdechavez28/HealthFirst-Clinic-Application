@@ -7,6 +7,9 @@ export default function DoctorLogin({ onLogin }) {
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
+  const [showResetModal, setShowResetModal] = useState(false)
+  const [resetEmail, setResetEmail] = useState("")
+  const [resetSent, setResetSent] = useState(false)
 
   const handleLogin = async (e) => {
     e.preventDefault()
@@ -19,13 +22,28 @@ export default function DoctorLogin({ onLogin }) {
     }
   }
 
+  const handlePasswordReset = (e) => {
+    e.preventDefault()
+    if (!resetEmail.trim()) {
+      alert("Please enter your email address")
+      return
+    }
+    setResetSent(true)
+    // Auto-reset after 4 seconds
+    setTimeout(() => {
+      setResetSent(false)
+      setResetEmail("")
+      setShowResetModal(false)
+    }, 4000)
+  }
+
   return (
     <div
-      className="min-h-screen bg-cover bg-center flex items-center"
+      className="min-h-screen bg-cover bg-center flex items-center justify-center"
       style={{ backgroundImage: "url('/doctor-bg.png')" }}
     >
       {/*Glass Card*/}
-      <div className="ml-[200px] bg-white/40 backdrop-blur-xl rounded-2xl border border-white/30 shadow-xl p-5 w-[420px]">
+      <div className="bg-white/40 backdrop-blur-xl rounded-2xl border border-white/30 shadow-xl p-5 w-[420px]">
         
         {/*Logo*/}
         <div className="flex justify-center gap-2 mb-6 ">
@@ -88,25 +106,80 @@ export default function DoctorLogin({ onLogin }) {
                     >
                     {loading ? "Logging in..." : "Continue"}
                 </button>
-                <div className="flex justify-between text-sm mt-3">
-                  <span className="text-txtblue cursor-pointer hover:underline">
+                <div className="flex justify-center text-sm mt-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowResetModal(true)}
+                    className="text-txtblue cursor-pointer hover:underline"
+                  >
                     Forgot Password?
-                  </span>
-                  <span className="text-txtblue cursor-pointer hover:underline">
-                    Help
-                  </span>
+                  </button>
                 </div>
             </form>
         </div>
       </div>
 
-      {/* Right Text */}
-      <div className="ml-[150px] mb-[50px] mr-[50px] text-right text-white max-w-md">
-        <h2 className="text-4xl font-abhaya font-extrabold text-black">
-          Putting patients, <span className="text-txtblue">first.</span>
-        </h2>
-        <p className="text-4xl font-abhaya font-extrabold mt-2 text-black">Everywhere.</p>
-      </div>
+      {/* Password Reset Modal */}
+      {showResetModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-lg p-6 w-96 max-w-sm">
+            {!resetSent ? (
+              <>
+                <h2 className="text-lg font-semibold text-slate-900 mb-3">
+                  Reset Password
+                </h2>
+                <p className="text-sm text-slate-600 mb-4">
+                  Enter your email address and we'll send you a link to reset your password.
+                </p>
+                <form onSubmit={handlePasswordReset}>
+                  <input
+                    type="email"
+                    value={resetEmail}
+                    onChange={(e) => setResetEmail(e.target.value)}
+                    placeholder="Enter your email"
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-hf-blue/40 focus:border-hf-blue mb-4"
+                    required
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowResetModal(false)}
+                      className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold hover:bg-slate-50"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="flex-1 rounded-lg bg-hf-blue text-white px-3 py-2 text-sm font-semibold hover:bg-hf-blueDark"
+                    >
+                      Send Reset Link
+                    </button>
+                  </div>
+                </form>
+              </>
+            ) : (
+              <>
+                <div className="text-center">
+                  <div className="mx-auto mb-4 h-12 w-12 rounded-full bg-green-100 flex items-center justify-center">
+                    <svg className="h-6 w-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                  </div>
+                  <h3 className="text-lg font-semibold text-slate-900 mb-2">
+                    Check Your Email
+                  </h3>
+                  <p className="text-sm text-slate-600 mb-3">
+                    We've sent a password reset link to <span className="font-semibold">{resetEmail}</span>
+                  </p>
+                  <p className="text-xs text-slate-500 mb-4">
+                    (Demo Mode: This message will close automatically)
+                  </p>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

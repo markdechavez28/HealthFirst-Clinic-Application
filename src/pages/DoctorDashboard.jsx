@@ -5,15 +5,20 @@ import {
   Users,
   Clock,
   LogOut,
-  Search
+  Lock
 } from "lucide-react"
 import { useNavigate } from "react-router-dom"
 import { useEffect, useState } from "react"
-import { getAppointmentsByDoctor, updateAppointmentStatus } from "../services/doctorService"
+import { getAppointmentsByDoctor, updateDoctorPassword } from "../services/doctorService"
+import { supabaseDoctor as supabase } from "../utils/supabaseClient"
+import ChangePasswordDialog from "../components/ChangePasswordDialog"
 
 export default function DoctorDashboard({ doctor, onLogout }) {
   const navigate = useNavigate();
-  const [appointments, setAppointments] = useState([]);
+  const [appointments, setAppointments] = useState([])
+  const [consultationHistory, setConsultationHistory] = useState([]);
+  const [showChangePasswordDialog, setShowChangePasswordDialog] = useState(false);
+  const [changePasswordLoading, setChangePasswordLoading] = useState(false);
 
   // load appointments when doctor is available
   useEffect(() => {
@@ -22,6 +27,15 @@ export default function DoctorDashboard({ doctor, onLogout }) {
       try {
         const appts = await getAppointmentsByDoctor(doctor.doctorID);
         setAppointments(appts || []);
+
+        // Load last 5 consultations
+        const { data: history } = await supabase
+          .from("Appointment")
+          .select("*, Patient(name)")
+          .eq("doctorID", doctor.doctorID)
+          .order("appointment_date", { ascending: false })
+          .limit(5);
+        setConsultationHistory(history || []);
       } catch (e) {
         console.error("failed to load doctor appointments", e);
       }
@@ -38,31 +52,17 @@ export default function DoctorDashboard({ doctor, onLogout }) {
     }
   };
 
-  // Accept request - update appointment status
-  const acceptRequest = async (id) => {
+  const handleChangePassword = async (currentPassword, newPassword) => {
+    setChangePasswordLoading(true);
     try {
-      await updateAppointmentStatus(id, "upcoming");
-      setAppointments((prev) =>
-        prev.map((a) =>
-          a.appointmentID === id ? { ...a, status: "upcoming" } : a
-        )
-      );
-    } catch (e) {
-      console.error("acceptRequest error", e);
-    }
-  };
-
-  // Reject request
-  const rejectRequest = async (id) => {
-    try {
-      await updateAppointmentStatus(id, "rejected");
-      setAppointments((prev) =>
-        prev.map((a) =>
-          a.appointmentID === id ? { ...a, status: "rejected" } : a
-        )
-      );
-    } catch (e) {
-      console.error("rejectRequest error", e);
+      await updateDoctorPassword(currentPassword, newPassword);
+      alert("Password changed successfully!");
+      setShowChangePasswordDialog(false);
+    } catch (error) {
+      console.error("Failed to change password:", error);
+      alert("Failed to change password: " + (error.message || "Unknown error"));
+    } finally {
+      setChangePasswordLoading(false);
     }
   };
 
@@ -95,10 +95,8 @@ export default function DoctorDashboard({ doctor, onLogout }) {
     .filter(isFutureOrPresent)
     .filter((a) => a.status === "ongoing" || a.status === "upcoming");
 
-  // Pending requests are simply appointments with status pending (and in the future)
-  const pendingRequests = appointments
-    .filter(isFutureOrPresent)
-    .filter((a) => a.status === "pending");
+  // No more pending requests since appointments are auto-confirmed
+  const pendingRequests = [];
 
   // Filter only future/present appointments for statistics and display
   const futureAppointments = appointments.filter(isFutureOrPresent);
@@ -113,7 +111,7 @@ export default function DoctorDashboard({ doctor, onLogout }) {
     <div className="min-h-screen flex bg-[#f2f2f2] font-hammersmith">
 
       {/* SIDEBAR */}
-      <aside className="w-64 bg-hf-sidebar p-6 flex flex-col shadow-[0_20px_20px_rgba(0,0,0,0.30)]">
+      <aside className="w-64 bg-hf-sidebar p-6 flex flex-col" style={{boxShadow: "0 1px 3px rgba(15, 23, 42, 0.08)"}}>
         <div className="flex justify-center gap-2 mb-6 ">
             <img src="/hf-logo.png" className="h-[40px] w-auto" />
         </div>
@@ -129,10 +127,10 @@ export default function DoctorDashboard({ doctor, onLogout }) {
 
         <nav className="flex flex-col gap-2">
           <NavItem icon={<LayoutDashboard size={18} />} text="Dashboard" to="/doctor/dashboard"/>
-          <NavItem icon={<CalendarCheck size={18} />} text="Appointments" to="/doctor/appointments"/>
-          <NavItem icon={<Video size={18} />} text="Video Conference" to="/doctor/vc"/>
+          <NavItem icon={<Video size={18} />} text="Online Consultations" to="/doctor/vc"/>
           <NavItem icon={<Users size={18} />} text="Patient Profile" to="/doctor/patients"/>
           <NavItem icon={<Clock size={18} />} text="My Schedule" to="/doctor/schedule"/>
+          <NavItem icon={<Lock size={18} />} text="Change Password" onClick={() => setShowChangePasswordDialog(true)}/>
           <NavItem icon={<LogOut size={18} />} text="Logout" onClick={handleLogout}/>
         </nav>
       </aside>
@@ -141,101 +139,83 @@ export default function DoctorDashboard({ doctor, onLogout }) {
       <main className="flex-1 p-6">
 
         {/* TOP BAR */}
-        <div className="flex justify-between items-center bg-white rounded-xl px-6 py-3 mb-6 shadow">
+        <div className="flex justify-between items-center bg-white px-6 py-3 mb-6" style={{boxShadow: "0 1px 3px rgba(15, 23, 42, 0.08)"}}>
           <h2 className="text-2xl font-regular text-txtblue">Dashboard</h2>
-          <div className="relative w-64">
-            <Search size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400"/>
-            <input type="text" placeholder="Search" className="w-full pl-3 pr-4 py-1.5 text-sm border rounded-full focus:outline-none focus:ring-2 focus:ring-bglightblue"/>
-          </div>
         </div>
 
-        {/* STATS */}
-        <div className="grid grid-cols-3 gap-6 mb-6">
-          <StatCard title="Patients" count={totalPatients} icon={<Users size={70}/>} date={today} />
-          <StatCard title="Conferences" count={totalConferences} icon={<Video size={70}/>} date={today} />
-          <StatCard title="Appointments" count={totalAppointments} icon={<CalendarCheck size={70}/>} date={today} />
-        </div>
+        {/* LOWER SECTION - SIMPLIFIED */}
+        <div className="grid grid-cols-2 gap-6">
 
-        {/* LOWER SECTION */}
-        <div className="flex gap-6 items-start">
-
-          {/* Left column: Appointments & Patient Requests */}
-          <div className="flex-1 flex flex-col gap-4">
-
-            {/* Today's Appointments - No collapse */}
-            <div className="bg-hf-panel rounded-xl p-4">
-              <h3 className="font-semibold mb-3">Appointments</h3>
-              <div className="flex flex-col gap-2">
-                {todayAppointments.length === 0 ? (
-                  <p className="text-sm text-gray-500">No appointments for today</p>
-                ) : (
-                  todayAppointments.map((appt) => (
-                    <div key={appt.appointmentID} className="bg-white rounded-lg p-3 flex justify-between items-center">
-                      <div>
-                        <p className="font-semibold">{appt.Patient?.name || "Unknown Patient"}</p>
-                        <p className="text-xs text-gray-500">{appt.appointment_date} {appt.time_slot}</p>
-                      </div>
-                      <span className={`text-white text-xs px-3 py-1 rounded-full w-max ${statusColor(appt.status)}`}>
-                        {appt.status}
-                      </span>
+          {/* Upcoming Appointments */}
+          <div className="bg-white p-6" style={{boxShadow: "0 1px 3px rgba(15, 23, 42, 0.08)"}}>
+            <h3 className="font-semibold mb-3">Upcoming Appointments</h3>
+            <div className="space-y-2">
+              {todayAppointments.length === 0 ? (
+                <p className="text-sm text-gray-500">No appointments today</p>
+              ) : (
+                todayAppointments.slice(0, 5).map((appt) => (
+                  <div key={appt.appointmentID} className="bg-gray-50 p-3 flex justify-between items-center">
+                    <div>
+                      <p className="font-semibold text-sm">{appt.Patient?.name || "Unknown Patient"}</p>
+                      <p className="text-xs text-gray-500">{appt.appointment_date} {appt.time_slot}</p>
                     </div>
-                  ))
-                )}
-              </div>
-            </div>
-
-            {/* Patient Requests - No collapse */}
-            <div className="bg-hf-panel rounded-xl p-4">
-              <h3 className="font-semibold mb-3">Patient Requests</h3>
-              <div className="flex flex-col gap-2">
-                {pendingRequests.length === 0 ? (
-                  <p className="text-sm text-gray-500">No pending requests</p>
-                ) : (
-                  pendingRequests.map((req) => (
-                    <div key={req.appointmentID} className="bg-white rounded-lg p-3 flex justify-between items-center">
-                      <div>
-                        <p className="font-semibold">{req.Patient?.name || "Unknown"}</p>
-                        <p className="text-xs text-gray-500">{req.appointment_date} {req.time_slot}</p>
-                      </div>
-                      <span className="bg-orange-500 text-white text-xs px-3 py-1 rounded-full w-max">
-                        Pending
-                      </span>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-
-          </div>
-
-          {/* Right column: Next Patient Details */}
-          <div className="w-[320px] bg-hf-panel rounded-xl p-10 flex flex-col justify-start">
-            <h3 className="font-semibold mb-4">Next Patient Details</h3>
-            {todayAppointments.length > 0 ? (
-              <>
-                <div className="flex items-center gap-3 mb-4">
-                  <img src="/child.jpg" className="w-16 h-16 rounded-full border-2 border-lightgreen"/>
-                  <div>
-                    <p className="font-regular">{todayAppointments[0]?.Patient?.name || "Unknown"}</p>
-                    <p className="text-sm text-gray-500">{todayAppointments[0]?.details || "Appointment"}</p>
+                    <span className={`text-white text-xs px-3 py-1 w-max ${statusColor(appt.status)}`}>
+                      {appt.status}
+                    </span>
                   </div>
-                </div>
-                <div className="text-sm space-y-1">
-                  <p><strong>Patient ID:</strong> {todayAppointments[0]?.patientID || "N/A"}</p>
-                  <p><strong>Status:</strong> {todayAppointments[0]?.status || "N/A"}</p>
-                  <p><strong>Email:</strong> {todayAppointments[0]?.Patient?.email || "N/A"}</p>
-                  <p><strong>Contact:</strong> {todayAppointments[0]?.Patient?.contact_num || "N/A"}</p>
-                  <p><strong>Date:</strong> {todayAppointments[0]?.appointment_date || "N/A"}</p>
-                  <p><strong>Time:</strong> {todayAppointments[0]?.time_slot || "N/A"}</p>
-                </div>
-              </>
-            ) : (
-              <p className="text-sm text-gray-500">No appointments today</p>
-            )}
+                ))
+              )}
+            </div>
           </div>
 
+          {/* Recent Consultation History */}
+          <div className="bg-white p-6" style={{boxShadow: "0 1px 3px rgba(15, 23, 42, 0.08)"}}>
+            <h2 className="font-semibold text-base mb-3">Recent Consultation History</h2>
+            {consultationHistory.length === 0 && <p className="text-slate-400 text-sm">No consultation history</p>}
+            <div className="space-y-2">
+              {consultationHistory.slice(0, 5).map(appt => {
+                const statusColor = {
+                  'completed': 'bg-green-100 text-green-800',
+                  'cancelled': 'bg-red-100 text-red-800',
+                  'upcoming': 'bg-blue-100 text-blue-800',
+                  'ongoing': 'bg-yellow-100 text-yellow-800',
+                  'unattended_by_patient': 'bg-orange-100 text-orange-800',
+                  'unattended_by_doctor': 'bg-purple-100 text-purple-800',
+                }[appt.status] || 'bg-gray-100 text-gray-800'
+
+                const statusLabel = {
+                  'completed': 'Completed',
+                  'cancelled': 'Cancelled',
+                  'upcoming': 'Upcoming',
+                  'ongoing': 'Ongoing',
+                  'unattended_by_patient': 'Patient No-Show',
+                  'unattended_by_doctor': 'Doctor No-Show',
+                }[appt.status] || appt.status
+
+                return (
+                  <div key={appt.appointmentID} className="border-l-4 border-hf-blue bg-gray-50 p-3 flex justify-between items-start text-sm">
+                    <div>
+                      <p className="font-semibold text-gray-900">{appt.Patient?.name || 'Patient'}</p>
+                      <p className="text-xs text-gray-600 mt-1">{appt.appointment_date} • {appt.time_slot}</p>
+                    </div>
+                    <span className={`text-xs font-semibold px-2 py-1 whitespace-nowrap ml-3 ${statusColor}`}>
+                      {statusLabel}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
         </div>
       </main>
+
+      {/* Change Password Dialog */}
+      <ChangePasswordDialog
+        isOpen={showChangePasswordDialog}
+        onClose={() => setShowChangePasswordDialog(false)}
+        onSubmit={handleChangePassword}
+        loading={changePasswordLoading}
+      />
     </div>
   )
 }
@@ -248,7 +228,7 @@ function NavItem({ icon, text, to, onClick }) {
     if (to) navigate(to)
   }
   return (
-    <button onClick={handleClick} className="flex items-center gap-3 px-4 py-2 rounded-lg text-sm text-black hover:bg-hf-blue hover:text-white transition">
+    <button onClick={handleClick} className="flex items-center gap-3 px-4 py-2 text-sm text-black hover:bg-hf-blue hover:text-white transition">
       {icon}
       <span>{text}</span>
     </button>
@@ -262,13 +242,12 @@ function StatCard({ title, count, icon, date }) {
     day: "numeric"
   });
   return (
-    <div className="bg-hf-blue text-white rounded-xl p-6 shadow flex justify-between items-center">
+    <div className="bg-hf-blue text-white p-6" style={{boxShadow: "0 1px 3px rgba(15, 23, 42, 0.08)"}}>
       <div>
         <p className="text-lg">{title}</p>
         <p className="text-3xl font-bold">{count < 10 ? `0${count}` : count}</p>
         <p className="text-sm mt-1">{displayDate}</p>
       </div>
-      <div className="text-4xl opacity-70">{icon}</div>
     </div>
   )
 }
@@ -278,9 +257,9 @@ function statusColor(status) {
   switch(lower){
     case "ongoing": return "bg-green-500";
     case "upcoming": return "bg-blue-500";
-    case "completed": return "bg-gray-400";
-    case "pending": return "bg-orange-500";
-    case "rejected": return "bg-red-500";
-    default: return "bg-gray-300";
+    case "completed": return "bg-gray-500";
+    case "unattended_by_patient": return "bg-orange-500";
+    case "unattended_by_doctor": return "bg-red-500";
+    default: return "bg-slate-300";
   }
 }

@@ -1,17 +1,21 @@
-import React from "react";
+import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import HealthFirstLogo from "./HealthFirstLogo.jsx";
 import { Icon } from "./Icon.jsx";
+import ChangePasswordDialog from "./ChangePasswordDialog.jsx";
+import { updatePatientPassword } from "../services/patientService.js";
 
 const NAV = [
   { key: "dashboard", label: "Dashboard", icon: "grid" },
-  { key: "appointments", label: "Appointments", icon: "calendar" },
-  { key: "video", label: "Video Conference", icon: "video" },
+  { key: "appointments", label: "Book Appointments", icon: "calendar" },
+  { key: "video", label: "Online Consultations", icon: "video" },
   { key: "logs", label: "Consultation Log", icon: "clock" },
 ];
 
 export default function DashboardLayout({ patient, active, onLogout, children }) {
   const navigate = useNavigate();
+  const [showChangePasswordDialog, setShowChangePasswordDialog] = useState(false);
+  const [changePasswordLoading, setChangePasswordLoading] = useState(false);
 
   const handleNavigation = (key) => {
     if (key === "dashboard") {
@@ -21,10 +25,24 @@ export default function DashboardLayout({ patient, active, onLogout, children })
     }
   };
 
+  const handleChangePassword = async (currentPassword, newPassword) => {
+    setChangePasswordLoading(true);
+    try {
+      await updatePatientPassword(currentPassword, newPassword);
+      alert("Password changed successfully!");
+      setShowChangePasswordDialog(false);
+    } catch (error) {
+      console.error("Failed to change password:", error);
+      alert("Failed to change password: " + (error.message || "Unknown error"));
+    } finally {
+      setChangePasswordLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-100">
       <div className="mx-auto max-w-6xl px-4 py-6">
-        <div className="rounded-2xl bg-white shadow-soft overflow-hidden">
+        <div className="bg-white overflow-hidden" style={{boxShadow: "0 1px 3px rgba(15, 23, 42, 0.08)"}}>
           <div className="grid grid-cols-12">
             <aside className="col-span-12 md:col-span-4 lg:col-span-3 bg-hf-sidebar border-r border-slate-200">
               <div className="p-6">
@@ -56,6 +74,14 @@ export default function DashboardLayout({ patient, active, onLogout, children })
                   })}
 
                   <button
+                    onClick={() => setShowChangePasswordDialog(true)}
+                    className="w-full flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-semibold hover:bg-yellow-50"
+                  >
+                    <Icon name="lock" className="w-4 h-4" />
+                    Change Password
+                  </button>
+
+                  <button
                     onClick={onLogout}
                     className="w-full flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-semibold hover:bg-red-50"
                   >
@@ -72,6 +98,14 @@ export default function DashboardLayout({ patient, active, onLogout, children })
           </div>
         </div>
       </div>
+
+      {/* Change Password Dialog */}
+      <ChangePasswordDialog
+        isOpen={showChangePasswordDialog}
+        onClose={() => setShowChangePasswordDialog(false)}
+        onSubmit={handleChangePassword}
+        loading={changePasswordLoading}
+      />
     </div>
   );
 }

@@ -1,152 +1,311 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { NavLink } from "react-router-dom";
+import { supabasePatient as supabase } from "../utils/supabaseClient";
+import { Loader } from "lucide-react";
 
 const AdminAppointments = ({ onLogout }) => {
+  const [appointments, setAppointments] = useState([]);
+  const [cancellationLogs, setCancellationLogs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [cancellationLoading, setCancellationLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const fetchAppointments = async () => {
+      try {
+        const { data, error: err } = await supabase
+          .from("Appointment")
+          .select(`
+            appointmentID,
+            patientID,
+            doctorID,
+            appointment_date,
+            time_slot,
+            status,
+            Patient:patientID(name, email),
+            Doctor:doctorID(name, specialty)
+          `)
+          .order("appointment_date", { ascending: false });
+
+        if (err) throw err;
+        
+        console.log("Fetched appointments:", data);
+        setAppointments(data || []);
+      } catch (e) {
+        console.error("Error fetching appointments:", e);
+        setError(e.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    const fetchCancellationLogs = async () => {
+      setCancellationLoading(true);
+      try {
+        const { data, error: err } = await supabase
+          .from("CancellationLog")
+          .select("*")
+          .order("cancelledAt", { ascending: false })
+          .limit(50);
+        
+        if (err) throw err;
+        setCancellationLogs(data || []);
+      } catch (error) {
+        console.error("Error loading cancellation logs:", error);
+        // Silently fail if table doesn't exist
+      } finally {
+        setCancellationLoading(false);
+      }
+    };
+
+    fetchAppointments();
+    fetchCancellationLogs();
+  }, []);
+
+  const getStatusColor = (status) => {
+    switch (status?.toLowerCase()) {
+      case "upcoming":
+        return "bg-blue-100 text-blue-700";
+      case "ongoing":
+        return "bg-green-100 text-green-700";
+      case "completed":
+        return "bg-gray-100 text-gray-700";
+      case "unattended_by_patient":
+        return "bg-orange-100 text-orange-700";
+      case "unattended_by_doctor":
+        return "bg-red-100 text-red-700";
+      default:
+        return "bg-slate-100 text-slate-600";
+    }
+  };
+
+  const getStatusBadgeText = (status) => {
+    switch (status?.toLowerCase()) {
+      case "unattended_by_patient": return "Patient No-Show";
+      case "unattended_by_doctor": return "Unconfirmed";
+      default: return status?.charAt(0).toUpperCase() + status?.slice(1);
+    }
+  };
+
   return (
     <main className="min-h-screen bg-white px-5 py-10 text-slate-800">
       <div className="mx-auto grid w-full max-w-6xl grid-cols-1 gap-6 lg:grid-cols-[240px_1fr]">
-        <aside className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-          <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Admin Panel</p>
+        <aside className="rounded-lg border border-slate-200 bg-slate-50 p-4" style={{boxShadow: "0 1px 3px rgba(15, 23, 42, 0.08)"}}>
+          <p className="text-xs font-semibold uppercase tracking-wide text-hf-blue">Admin Panel</p>
           <nav className="mt-4 space-y-2">
             <NavLink
               to="/admin/dashboard"
               className={({ isActive }) =>
                 `block rounded-md px-3 py-2 text-sm font-semibold ${
-                  isActive ? "bg-emerald-700 text-white" : "text-slate-700 hover:bg-slate-100"
+                  isActive ? "bg-hf-blue text-white" : "text-slate-700 hover:bg-slate-100"
                 }`
               }
             >
               Dashboard
             </NavLink>
             <NavLink
-              to="/admin/manage-user-account"
+              to="/admin/patients"
               className={({ isActive }) =>
                 `block rounded-md px-3 py-2 text-sm font-semibold ${
-                  isActive ? "bg-emerald-700 text-white" : "text-slate-700 hover:bg-slate-100"
+                  isActive ? "bg-hf-blue text-white" : "text-slate-700 hover:bg-slate-100"
                 }`
               }
             >
-              Manage User Account
+              Patient Information
             </NavLink>
             <NavLink
               to="/admin/appointments"
               className={({ isActive }) =>
                 `block rounded-md px-3 py-2 text-sm font-semibold ${
-                  isActive ? "bg-emerald-700 text-white" : "text-slate-700 hover:bg-slate-100"
+                  isActive ? "bg-hf-blue text-white" : "text-slate-700 hover:bg-slate-100"
                 }`
               }
             >
-              View Appointments
+              Appointment Information
             </NavLink>
-          </nav>
-          {onLogout && (
-            <button
-              onClick={onLogout}
-              className="mt-4 w-full rounded-md border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100"
+            <NavLink
+              to="/admin/doctors"
+              className={({ isActive }) =>
+                `block rounded-md px-3 py-2 text-sm font-semibold ${
+                  isActive ? "bg-hf-blue text-white" : "text-slate-700 hover:bg-slate-100"
+                }`
+              }
             >
-              Logout
-            </button>
-          )}
+              Doctor Information
+            </NavLink>
+            <NavLink
+              to="/admin/doctor-schedules"
+              className={({ isActive }) =>
+                `block rounded-md px-3 py-2 text-sm font-semibold ${
+                  isActive ? "bg-hf-blue text-white" : "text-slate-700 hover:bg-slate-100"
+                }`
+              }
+            >
+              Manage Doctor Schedule
+            </NavLink>
+            {onLogout && (
+              <button
+                onClick={onLogout}
+                className="w-full mt-6 rounded-md border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100"
+              >
+                Logout
+              </button>
+            )}
+          </nav>
         </aside>
 
         <div className="space-y-6">
           <header className="space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Admin</p>
-            <h1 className="text-2xl font-semibold">View Appointments</h1>
-            <p className="text-sm text-slate-600">Monitor schedules, status, and appointment actions.</p>
+            <h1 className="text-3xl font-extrabold text-slate-900">Appointment Information</h1>
+            <p className="text-sm text-slate-600">Monitor and manage all appointments and cancellations</p>
           </header>
 
-          <section className="overflow-hidden rounded-lg border border-slate-200">
-            <div className="bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700">Appointments</div>
-            <div className="w-full overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead className="bg-slate-100 text-xs uppercase text-slate-500">
-                  <tr>
-                    <th className="px-4 py-3 font-semibold">Patient</th>
-                    <th className="px-4 py-3 font-semibold">Doctor</th>
-                    <th className="px-4 py-3 font-semibold">Type</th>
-                    <th className="px-4 py-3 font-semibold">Schedule</th>
-                    <th className="px-4 py-3 font-semibold">Status</th>
-                    <th className="px-4 py-3 font-semibold">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200">
-                  <tr>
-                    <td className="px-4 py-3">Clarisse Aquino</td>
-                    <td className="px-4 py-3">Dr. Rey Santos</td>
-                    <td className="px-4 py-3">Online Consultation</td>
-                    <td className="px-4 py-3">Feb 12, 2026 • 10:30 AM</td>
-                    <td className="px-4 py-3">
-                      <span className="rounded-full bg-emerald-100 px-2 py-1 text-xs font-semibold text-emerald-700">
-                        Confirmed
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-wrap gap-2">
-                        <button className="rounded-md border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50">
-                          View
-                        </button>
-                        <button className="rounded-md border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50">
-                          Reschedule
-                        </button>
-                        <button className="rounded-md border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-50">
-                          Cancel
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td className="px-4 py-3">Miguel Reyes</td>
-                    <td className="px-4 py-3">Dr. Nina Torres</td>
-                    <td className="px-4 py-3">Follow-up</td>
-                    <td className="px-4 py-3">Feb 14, 2026 • 2:00 PM</td>
-                    <td className="px-4 py-3">
-                      <span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-700">
-                        Pending
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-wrap gap-2">
-                        <button className="rounded-md border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50">
-                          View
-                        </button>
-                        <button className="rounded-md border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50">
-                          Reschedule
-                        </button>
-                        <button className="rounded-md border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-50">
-                          Cancel
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td className="px-4 py-3">Jessa Navarro</td>
-                    <td className="px-4 py-3">Dr. Carlo Lim</td>
-                    <td className="px-4 py-3">Initial Consultation</td>
-                    <td className="px-4 py-3">Feb 15, 2026 • 9:00 AM</td>
-                    <td className="px-4 py-3">
-                      <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600">
-                        Completed
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-wrap gap-2">
-                        <button className="rounded-md border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50">
-                          View
-                        </button>
-                        <button className="rounded-md border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50">
-                          Reschedule
-                        </button>
-                        <button className="rounded-md border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-50">
-                          Cancel
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+          {loading ? (
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-8 text-center">
+              <p className="text-slate-600">Loading appointments...</p>
             </div>
-          </section>
+          ) : error ? (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3">
+              <p className="text-sm text-red-800">Error loading appointments: {error}</p>
+            </div>
+          ) : (
+            <>
+              <section className="overflow-hidden rounded-lg border border-slate-200">
+                <div className="bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700">
+                  Appointments ({appointments.length})
+                </div>
+                <div className="w-full overflow-x-auto">
+                  {appointments.length === 0 ? (
+                    <div className="px-4 py-8 text-center text-slate-600">
+                      No appointments found.
+                    </div>
+                  ) : (
+                    <table className="w-full text-left text-sm">
+                      <thead className="bg-slate-100 text-xs uppercase text-slate-500">
+                        <tr>
+                          <th className="px-4 py-3 font-semibold">Patient</th>
+                          <th className="px-4 py-3 font-semibold">Doctor</th>
+                          <th className="px-4 py-3 font-semibold">Type</th>
+                          <th className="px-4 py-3 font-semibold">Schedule</th>
+                          <th className="px-4 py-3 font-semibold">Status</th>
+                          <th className="px-4 py-3 font-semibold">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-200">
+                        {appointments.map((appt) => (
+                          <tr key={appt.appointmentID} className="hover:bg-slate-50">
+                            <td className="px-4 py-3">
+                              <div>
+                                <p className="font-semibold">{appt.Patient?.name || "Unknown"}</p>
+                                <p className="text-xs text-slate-500">{appt.Patient?.email || ""}</p>
+                              </div>
+                            </td>
+                            <td className="px-4 py-3">
+                              <div>
+                                <p className="font-semibold">Dr. {appt.Doctor?.name || "Unknown"}</p>
+                                <p className="text-xs text-slate-500">{appt.Doctor?.specialty || ""}</p>
+                              </div>
+                            </td>
+                            <td className="px-4 py-3">
+                              {appt.consultationType || "Consultation"}
+                            </td>
+                            <td className="px-4 py-3">
+                              <p className="font-medium">{appt.appointment_date}</p>
+                              <p className="text-xs text-slate-500">{appt.time_slot}</p>
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className={`rounded-full px-3 py-1 text-xs font-semibold ${getStatusColor(appt.status)}`}>
+                                {getStatusBadgeText(appt.status)}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="flex flex-wrap gap-2">
+                                <button className="rounded-md border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition">
+                                  View
+                                </button>
+                                {["upcoming", "ongoing"].includes(appt.status) && (
+                                  <button className="rounded-md border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition">
+                                    Reschedule
+                                  </button>
+                                )}
+                                {!["completed", "unattended"].includes(appt.status) && (
+                                  <button className="rounded-md border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-50 transition">
+                                    Cancel
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              </section>
+
+              {/* Cancellation Logs Section */}
+              <section className="rounded-lg border border-slate-200 bg-white p-6 mt-6">
+                <h2 className="mb-6 text-xl font-bold text-slate-900">Cancellation Logs</h2>
+                
+                {cancellationLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader />
+                    <span className="ml-2 text-slate-600">Loading cancellation logs...</span>
+                  </div>
+                ) : cancellationLogs.length === 0 ? (
+                  <div className="py-8 text-center text-slate-500">
+                    No cancellation logs found
+                  </div>
+                ) : (
+                  <div className="max-h-[600px] overflow-x-auto">
+                    <table className="w-full text-left text-sm">
+                      <thead>
+                        <tr className="border-b border-slate-200">
+                          <th className="px-4 py-3 font-semibold text-slate-700">Cancelled By</th>
+                          <th className="px-4 py-3 font-semibold text-slate-700">Patient</th>
+                          <th className="px-4 py-3 font-semibold text-slate-700">Doctor</th>
+                          <th className="px-4 py-3 font-semibold text-slate-700">Appointment</th>
+                          <th className="px-4 py-3 font-semibold text-slate-700">Refund %</th>
+                          <th className="px-4 py-3 font-semibold text-slate-700">Cancelled At</th>
+                          <th className="px-4 py-3 font-semibold text-slate-700">Reason</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {cancellationLogs.map((log, idx) => (
+                          <tr key={idx} className="border-b border-slate-100 hover:bg-slate-50">
+                            <td className="px-4 py-3">
+                              <p className="capitalize font-semibold text-slate-900">{log.cancelledBy || "—"}</p>
+                            </td>
+                            <td className="px-4 py-3">
+                              <p className="font-semibold text-slate-900">{log.patientName || log.patientID || "—"}</p>
+                            </td>
+                            <td className="px-4 py-3">
+                              <p className="font-semibold text-slate-900">Dr. {log.doctorName || "—"}</p>
+                            </td>
+                            <td className="px-4 py-3">
+                              <p className="font-medium text-slate-700">{log.appointmentDate || "—"}</p>
+                              <p className="text-xs text-slate-500">{log.appointmentTime || "—"}</p>
+                            </td>
+                            <td className="px-4 py-3">
+                              <p className="font-semibold text-slate-900">{log.refundPercentage || "—"}%</p>
+                            </td>
+                            <td className="px-4 py-3">
+                              <p className="text-sm text-slate-600">
+                                {log.cancelledAt ? new Date(log.cancelledAt).toLocaleString() : "—"}
+                              </p>
+                            </td>
+                            <td className="px-4 py-3">
+                              <p className="text-slate-700">{log.reason || "—"}</p>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </section>
+            </>
+          )}
         </div>
       </div>
     </main>

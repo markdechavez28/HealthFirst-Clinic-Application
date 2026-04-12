@@ -1,8 +1,8 @@
-import React, { useMemo, useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { Icon } from "../components/Icon.jsx";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "../utils/supabaseClient";
-import { getUpcomingAppointment } from "../services/patientService";
+import { supabasePatient as supabase } from "../utils/supabaseClient";
+import { useNotification } from "../hooks/useNotification";
 
 function Badge({ children }) {
   return (
@@ -22,8 +22,9 @@ function Card({ className = "", children }) {
 
 export function PatientDashboard({ patient }) {
   const navigate = useNavigate();
-  const [search, setSearch] = useState("");
+  const { addNotification } = useNotification();
   const [upcoming, setUpcoming] = useState(null);
+  const [consultationHistory, setConsultationHistory] = useState([]);
 
   // debug: log on every render
   console.log("PatientDashboard rendered, patient:", patient);
@@ -63,121 +64,139 @@ export function PatientDashboard({ patient }) {
     load();
   }, [patient]);
 
-  const cards = useMemo(
-    () => [
-      {
-        title: "Upcoming Appointment",
-        left: (
-          <div className="space-y-2">
-            {upcoming ? (
-              <>
-                <div className="flex items-center gap-2 text-sm font-semibold">
-                  <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-white/15">
-                    <Icon name="calendar" className="w-4 h-4" />
-                  </span>
-                  {upcoming.doctorName || upcoming.doctorID || "Dr. ?"}
-                </div>
-                <div className="flex items-center gap-2 text-xs text-white/85">
-                  <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-white/15">
-                    <Icon name="clock" className="w-4 h-4" />
-                  </span>
-                  {upcoming.appointment_date} - {upcoming.time_slot} {upcoming.status && (
-                    <span className="ml-2 inline-flex items-center rounded-md bg-white/30 px-2 py-0.5 text-xs font-semibold text-slate-800">
-                      {upcoming.status}
-                    </span>
-                  )}
-                </div>
-              </>
-            ) : (
-              <div className="text-xs text-white/75">No upcoming appointments</div>
-            )}
-          </div>
-        ),
-        right: null,
+  // Load consultation history
+  useEffect(() => {
+    if (!patient?.patientID) return;
+    
+    const loadConsultationHistory = async () => {
+      const { data } = await supabase
+        .from("Appointment")
+        .select("*, Doctor(name, specialty)")
+        .eq("patientID", patient.patientID)
+        .order("appointment_date", { ascending: false })
+        .limit(5);
+      
+      setConsultationHistory(data || []);
+    };
+
+    loadConsultationHistory();
+  }, [patient]);
+
+  // Real-time subscription for appointment confirmations
+  useEffect(() => {
+    if (!patient?.patientID) {
+      console.log("Patient ID not available for subscription");
+      return;
+    }
+
+    console.log("Setting up real-time subscription for patient:", patient.patientID);
+
+    const channel = supabase.channel(`patient_appointments_${patient.patientID}`, {
+      config: {
+        broadcast: { self: true },
       },
-    ],
-    [upcoming]
-  );
+    });
+
+    channel
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "Appointment",
+          filter: `patientID=eq.${patient.patientID}`,
+        },
+        (payload) => {
+          console.log("Real-time UPDATE event received for Appointment:", payload);
+          const updatedAppointment = payload.new;
+          if (updatedAppointment.status === "upcoming") {
+            addNotification(
+              `Your appointment on ${new Date(updatedAppointment.appointment_date).toLocaleDateString()} has been confirmed!`,
+              "success"
+            );
+            // Reload appointment data
+            const load = async () => {
+              try {
+                const appt = await getUpcomingAppointment(patient.patientID);
+                if (appt) {
+                  const { data: doc } = await supabase
+                    .from("Doctor")
+                    .select("name,specialty")
+                    .eq("doctorID", appt.doctorID)
+                    .single();
+                  setUpcoming({ ...appt, doctorName: doc?.name, doctorSpecialty: doc?.specialty });
+                } else {
+                  setUpcoming(null);
+                }
+              } catch (e) {
+                console.error("exception during fetch", e);
+              }
+            };
+            load();
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log("Patient appointments subscription status:", status);
+        if (status === "SUBSCRIBED") {
+          console.log("Successfully subscribed to appointment confirmations");
+        } else if (status === "CHANNEL_ERROR") {
+          console.error("Channel error - Realtime might not be enabled for Appointment table");
+        }
+      });
+
+    return () => {
+      console.log("Unsubscribing from patient appointments");
+      channel.unsubscribe();
+    };
+  }, [patient?.patientID, addNotification]);
+
+
 
   return (
     <div className="p-6">
-      {/* Header (same as your other pages) */}
+      {/* Header */}
       <header className="mb-6">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <h1 className="text-3xl font-extrabold text-hf-blue">Dashboard</h1>
-
-          <div className="relative w-full sm:w-[360px]">
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full rounded-full border border-slate-200 bg-slate-100 px-4 py-2.5 pr-10 text-sm outline-none focus:ring-2 focus:ring-hf-blue/30 focus:border-hf-blue"
-              placeholder="Search"
-            />
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500">
-              <Icon name="search" className="w-5 h-5" />
-            </span>
-          </div>
-        </div>
+        <h1 className="text-3xl font-extrabold text-hf-blue">Dashboard</h1>
       </header>
 
-      <section>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {cards.map((c, idx) => (
-            <Card key={idx} className="p-4">
-              <div className="text-sm font-extrabold">{c.title}</div>
-              <div className="mt-3 flex items-center justify-between gap-3">
-                <div>{c.left}</div>
-                <div>{c.right}</div>
-              </div>
-            </Card>
-          ))}
-        </div>
+      {/* Last 5 Consultations History */}
+      <section className="bg-white p-6 mb-6" style={{boxShadow: "0 1px 3px rgba(15, 23, 42, 0.08)"}}>  
+        <h2 className="text-2xl font-semibold text-slate-900 mb-6">Recent Consultation History</h2>
+        {consultationHistory.length === 0 && <p className="text-slate-400 text-sm">No consultation history</p>}
+        <div className="space-y-3">
+          {consultationHistory.slice(0, 5).map(appt => {
+            const statusColor = {
+              'completed': 'bg-green-100 text-green-800',
+              'cancelled': 'bg-red-100 text-red-800',
+              'upcoming': 'bg-blue-100 text-blue-800',
+              'ongoing': 'bg-yellow-100 text-yellow-800',
+              'unattended_by_patient': 'bg-orange-100 text-orange-800',
+              'unattended_by_doctor': 'bg-purple-100 text-purple-800',
+            }[appt.status] || 'bg-gray-100 text-gray-800'
 
-        <div className="mt-6 rounded-lg bg-hf-panel p-5">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            {/* Medical History */}
-            <div className="rounded-lg bg-white border border-slate-200 overflow-hidden">
-              <div className="bg-hf-blue text-white px-5 py-3 flex items-center gap-2">
-                <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-white/15">
-                  <Icon name="pill" className="w-5 h-5" />
-                </span>
-                <div className="text-lg font-extrabold">Medical History</div>
-              </div>
-              <div className="p-5 space-y-4">
-                <button 
-                  onClick={() => navigate("/patient/dashboard/logs")}
-                  className="w-full flex items-center gap-3 rounded-lg bg-slate-100 px-4 py-3 text-left font-semibold text-slate-700 hover:bg-slate-200 transition"
-                >
-                  <span className="text-hf-blue">▶</span>
-                  Recent Visits
-                </button>
-                <button className="w-full flex items-center gap-3 rounded-lg bg-slate-100 px-4 py-3 text-left font-semibold text-slate-700 hover:bg-slate-200 transition">
-                  <span className="text-hf-blue">▶</span>
-                  Prescription Records
-                </button>
-              </div>
-            </div>
+            const statusLabel = {
+              'completed': 'Completed',
+              'cancelled': 'Cancelled',
+              'upcoming': 'Upcoming',
+              'ongoing': 'Ongoing',
+              'unattended_by_patient': 'No-Show',
+              'unattended_by_doctor': 'Doctor No-Show',
+            }[appt.status] || appt.status
 
-            {/* Health Tips */}
-            <div className="rounded-lg bg-white border border-slate-200 overflow-hidden">
-              <div className="bg-hf-blue text-white px-5 py-3 flex items-center gap-2">
-                <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-white/15">
-                  <Icon name="heart" className="w-5 h-5" />
+            return (
+              <div key={appt.appointmentID} className="border-l-4 border-hf-blue bg-slate-50 p-4 flex justify-between items-start">
+                <div className="flex-1">
+                  <p className="font-semibold text-slate-900">Dr. {appt.Doctor?.name || 'Doctor'}</p>
+                  <p className="text-sm text-slate-600">{appt.Doctor?.specialty}</p>
+                  <p className="text-sm text-slate-600 mt-2">{appt.appointment_date} • {appt.time_slot}</p>
+                </div>
+                <span className={`text-xs font-semibold px-3 py-1 whitespace-nowrap ml-3 ${statusColor}`}>
+                  {statusLabel}
                 </span>
-                <div className="text-lg font-extrabold">Health Tips</div>
               </div>
-              <div className="p-5 space-y-4">
-                <button className="w-full flex items-center gap-3 rounded-lg bg-slate-100 px-4 py-3 text-left font-semibold text-slate-700 hover:bg-slate-200 transition">
-                  <span className="text-hf-blue">▶</span>
-                  Telehealth Tips
-                </button>
-                <button className="w-full flex items-center gap-3 rounded-lg bg-slate-100 px-4 py-3 text-left font-semibold text-slate-700 hover:bg-slate-200 transition">
-                  <span className="text-hf-blue">▶</span>
-                  Wellness Articles
-                </button>
-              </div>
-            </div>
-          </div>
+            )
+          })}
         </div>
       </section>
     </div>

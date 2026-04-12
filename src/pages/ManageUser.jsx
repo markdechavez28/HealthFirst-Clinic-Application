@@ -1,991 +1,365 @@
 import React, { useState, useEffect } from "react";
-import { supabase, userService, appointmentService } from "../utils/supabaseClient";
-import { getAllSubmittedSchedules, approveSchedule, rejectSchedule } from "../services/doctorService";
-import { X, Plus, Edit2, Trash2, Search, Loader, Check, X as XIcon } from "lucide-react";
+import { NavLink } from "react-router-dom";
+import { supabase } from "../utils/supabaseClient";
+import { Plus, Edit2, Trash2, Search, Loader, X, AlertCircle } from "lucide-react";
 
 const ManageUser = ({ admin, onLogout }) => {
-  // User type toggle state
-  const [userType, setUserType] = useState("patient"); // "patient" or "doctor"
-
-  // User management state
-  const [users, setUsers] = useState([]);
-  const [filteredUsers, setFilteredUsers] = useState([]);
+  // Doctor management state
+  const [doctors, setDoctors] = useState([]);
+  const [filteredDoctors, setFilteredDoctors] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
-  const [userLoading, setUserLoading] = useState(false);
-  const [selectedUser, setSelectedUser] = useState(null);
-  const [showUserModal, setShowUserModal] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // Modal state
+  const [showModal, setShowModal] = useState(false);
   const [modalMode, setModalMode] = useState("add"); // "add" or "edit"
-
-  // Appointments state
-  const [appointments, setAppointments] = useState([]);
-  const [filteredAppointments, setFilteredAppointments] = useState([]);
-  const [appointmentSearch, setAppointmentSearch] = useState("");
-  const [appointmentFilter, setAppointmentFilter] = useState("all");
-  const [appointmentLoading, setAppointmentLoading] = useState(false);
-
-  // Advanced appointment filters
-  const [filterDoctor, setFilterDoctor] = useState("");
-  const [filterPatient, setFilterPatient] = useState("");
-  const [filterSpecialty, setFilterSpecialty] = useState("");
-  const [filterDateFrom, setFilterDateFrom] = useState("");
-  const [filterDateTo, setFilterDateTo] = useState("");
-  const [filterTimeSlot, setFilterTimeSlot] = useState("");
-
-  // Schedule approvals state
-  const [submittedSchedules, setSubmittedSchedules] = useState([]);
-  const [scheduleLoading, setScheduleLoading] = useState(false);
-
+  const [selectedDoctor, setSelectedDoctor] = useState(null);
+  const [error, setError] = useState("");
+  
   // Form state
   const [formData, setFormData] = useState({
     name: "",
     email: "",
     contact_num: "",
-    age: "",
-    sex: "",
     specialty: "",
   });
-
-  // Form validation state
+  
   const [formErrors, setFormErrors] = useState({});
 
-  // Load users on component mount and when user type changes
-  useEffect(() => {
-    loadUsers();
-    loadAppointments();
-    loadSubmittedSchedules();
-  }, [userType]);
+  // Helper function to format dates
+  const formatDate = (dateString) => {
+    if (!dateString) return "—";
+    try {
+      return new Date(dateString).toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      });
+    } catch {
+      return "—";
+    }
+  };
 
-  // Filter users based on search term
+  // Load doctors on mount
   useEffect(() => {
-    const filtered = users.filter(
-      (user) =>
-        user.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        user.email?.toLowerCase().includes(searchTerm.toLowerCase())
+    loadDoctors();
+  }, []);
+
+  // Filter doctors when search term changes
+  useEffect(() => {
+    const filtered = doctors.filter((doctor) =>
+      doctor.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      doctor.email?.toLowerCase().includes(searchTerm.toLowerCase())
     );
-    setFilteredUsers(filtered);
-  }, [searchTerm, users]);
+    setFilteredDoctors(filtered);
+  }, [searchTerm, doctors]);
 
-  // Filter appointments
-  useEffect(() => {
-    let filtered = appointments;
-
-    // Filter by status
-    if (appointmentFilter !== "all") {
-      filtered = filtered.filter(
-        (apt) => apt.status?.toLowerCase() === appointmentFilter.toLowerCase()
-      );
-    }
-
-    // Filter by doctor
-    if (filterDoctor) {
-      filtered = filtered.filter(
-        (apt) => apt.doctorID?.doctorID === filterDoctor
-      );
-    }
-
-    // Filter by patient
-    if (filterPatient) {
-      filtered = filtered.filter(
-        (apt) => apt.patientID?.patientID === filterPatient
-      );
-    }
-
-    // Filter by specialty
-    if (filterSpecialty) {
-      filtered = filtered.filter(
-        (apt) => apt.doctorID?.specialty === filterSpecialty
-      );
-    }
-
-    // Filter by date range
-    if (filterDateFrom) {
-      filtered = filtered.filter((apt) => {
-        const aptDate = new Date(apt.appointment_date);
-        const fromDate = new Date(filterDateFrom);
-        aptDate.setHours(0, 0, 0, 0);
-        fromDate.setHours(0, 0, 0, 0);
-        return aptDate >= fromDate;
-      });
-    }
-
-    if (filterDateTo) {
-      filtered = filtered.filter((apt) => {
-        const aptDate = new Date(apt.appointment_date);
-        const toDate = new Date(filterDateTo);
-        aptDate.setHours(0, 0, 0, 0);
-        toDate.setHours(0, 0, 0, 0);
-        return aptDate <= toDate;
-      });
-    }
-
-    // Filter by time slot
-    if (filterTimeSlot) {
-      filtered = filtered.filter(
-        (apt) => apt.time_slot === filterTimeSlot
-      );
-    }
-
-    // Filter by search term (name/email)
-    if (appointmentSearch) {
-      filtered = filtered.filter(
-        (apt) =>
-          apt.patientID?.name
-            ?.toLowerCase()
-            .includes(appointmentSearch.toLowerCase()) ||
-          apt.patientID?.email
-            ?.toLowerCase()
-            .includes(appointmentSearch.toLowerCase()) ||
-          apt.doctorID?.name
-            ?.toLowerCase()
-            .includes(appointmentSearch.toLowerCase())
-      );
-    }
-
-    setFilteredAppointments(filtered);
-  }, [
-    appointmentSearch,
-    appointmentFilter,
-    appointments,
-    filterDoctor,
-    filterPatient,
-    filterSpecialty,
-    filterDateFrom,
-    filterDateTo,
-    filterTimeSlot,
-  ]);
-
-  // Load users from database
-  const loadUsers = async () => {
-    setUserLoading(true);
+  const loadDoctors = async () => {
+    setLoading(true);
     try {
-      let data;
-      if (userType === "patient") {
-        data = await userService.getAllUsers();
-      } else {
-        data = await userService.getAllDoctors();
-      }
-      setUsers(data);
-    } catch (error) {
-      console.error("Error loading users:", error);
-      alert("Failed to load users. Check console for details.");
+      const { data, error: err } = await supabase
+        .from("Doctor")
+        .select("*");
+      
+      if (err) throw err;
+      setDoctors(data || []);
+    } catch (e) {
+      console.error("Error loading doctors:", e);
+      setError(e.message);
     } finally {
-      setUserLoading(false);
+      setLoading(false);
     }
   };
 
-  // Load appointments from database
-  const loadAppointments = async () => {
-    setAppointmentLoading(true);
-    try {
-      const data = await appointmentService.getAllAppointments();
-      setAppointments(data);
-    } catch (error) {
-      console.error("Error loading appointments:", error);
-      alert("Failed to load appointments. Check console for details.");
-    } finally {
-      setAppointmentLoading(false);
-    }
-  };
 
-  // Load submitted schedules for approval
-  const loadSubmittedSchedules = async () => {
-    setScheduleLoading(true);
-    try {
-      const data = await getAllSubmittedSchedules();
-      setSubmittedSchedules(data || []);
-    } catch (error) {
-      console.error("Error loading submitted schedules:", error);
-      alert("Failed to load submitted schedules. Check console for details.");
-    } finally {
-      setScheduleLoading(false);
-    }
-  };
-
-  // Handle schedule approval
-  const handleApproveSchedule = async (submittedScheduleID) => {
-    if (!confirm("Are you sure you want to approve this schedule?")) return;
-    if (!admin?.adminID) {
-      alert("Admin ID not found. Please log in again.");
-      return;
-    }
-    
-    try {
-      await approveSchedule(submittedScheduleID, admin.adminID);
-      alert("Schedule approved successfully!");
-      loadSubmittedSchedules();
-    } catch (error) {
-      console.error("Error approving schedule:", error);
-      alert("Failed to approve schedule. Check console for details.");
-    }
-  };
-
-  // Handle schedule rejection
-  const handleRejectSchedule = async (submittedScheduleID) => {
-    if (!confirm("Are you sure you want to reject this schedule?")) return;
-    if (!admin?.adminID) {
-      alert("Admin ID not found. Please log in again.");
-      return;
-    }
-    
-    try {
-      await rejectSchedule(submittedScheduleID, admin.adminID);
-      alert("Schedule rejected successfully!");
-      loadSubmittedSchedules();
-    } catch (error) {
-      console.error("Error rejecting schedule:", error);
-      alert("Failed to reject schedule. Check console for details.");
-    }
-  };
-
-  // Validate form based on user type
   const validateForm = () => {
     const errors = {};
-
+    
     if (!formData.name.trim()) errors.name = "Name is required";
     if (!formData.email.trim()) errors.email = "Email is required";
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email))
-      errors.email = "Invalid email format";
-
-    // Check for duplicate email (excluding current user if editing)
-    const idField = userType === "patient" ? "patientID" : "doctorID";
-    const emailExists = users.some(
-      (u) => u.email === formData.email && u[idField] !== selectedUser?.[idField]
-    );
-    if (emailExists) errors.email = "Email already in use";
-
-    // Doctor-specific validation
-    if (userType === "doctor") {
-      if (!formData.specialty.trim()) errors.specialty = "Specialty is required";
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) errors.email = "Invalid email format";
+    if (!formData.specialty.trim()) errors.specialty = "Specialty is required";
+    if (formData.contact_num && !/^\d{10,}$/.test(formData.contact_num.replace(/\D/g, ""))) {
+      errors.contact_num = "Invalid phone number";
     }
-
+    
+    // Check email uniqueness if adding new doctor
+    if (modalMode === "add") {
+      const emailExists = doctors.some((d) => d.email?.toLowerCase() === formData.email.toLowerCase());
+      if (emailExists) errors.email = "Email already exists";
+    }
+    
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
 
-  // Generate a temporary password for new users
-  const generateTemporaryPassword = () => {
-    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()";
-    let password = "";
-    for (let i = 0; i < 10; i += 1) {
-      password += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return password;
+  const handleAddClick = () => {
+    setModalMode("add");
+    setSelectedDoctor(null);
+    setFormData({ name: "", email: "", contact_num: "", specialty: "" });
+    setFormErrors({});
+    setError("");
+    setShowModal(true);
   };
 
-  // Handle add/edit user based on type
-  const handleSaveUser = async () => {
-    if (!validateForm()) return;
+  const handleEditClick = (doctor) => {
+    setModalMode("edit");
+    setSelectedDoctor(doctor);
+    setFormData({
+      name: doctor.name || "",
+      email: doctor.email || "",
+      contact_num: doctor.contact_num || "",
+      specialty: doctor.specialty || "",
+    });
+    setFormErrors({});
+    setError("");
+    setShowModal(true);
+  };
 
+  const handleDeleteClick = async (doctor) => {
+    if (window.confirm(`Are you sure you want to delete Dr. ${doctor.name}?`)) {
+      try {
+        const { error: err } = await supabase
+          .from("Doctor")
+          .delete()
+          .eq("doctorID", doctor.doctorID);
+        
+        if (err) throw err;
+        
+        setDoctors(doctors.filter((d) => d.doctorID !== doctor.doctorID));
+      } catch (e) {
+        console.error("Error deleting doctor:", e);
+        setError(e.message);
+      }
+    }
+  };
+
+  const handleFormSubmit = async (e) => {
+    e.preventDefault();
+    
+    if (!validateForm()) return;
+    
+    setIsSubmitting(true);
+    setError("");
+    
     try {
       if (modalMode === "add") {
-        const tempPassword = generateTemporaryPassword();
-        console.log("Creating auth user for email:", formData.email);
-
-        const { data: authData, error: authError } = await supabase.auth.signUp({
+        // Create auth user
+        const tempPassword = Math.random().toString(36).slice(-12);
+        
+        const { data: authData, error: authError } = await supabase.auth.admin.createUser({
           email: formData.email,
           password: tempPassword,
+          email_confirm: true,
         });
-
-        if (authError) {
-          console.error("Auth error:", authError);
-          throw authError;
-        }
-
-        const newUserId = authData?.user?.id;
-        console.log("New auth user ID:", newUserId);
-        if (!newUserId) {
-          throw new Error("Supabase auth did not return a user ID for new user.");
-        }
-
-        if (userType === "patient") {
-          console.log("Creating patient profile with ID:", newUserId);
-          await userService.createUser({
-            ...formData,
-            patientID: newUserId,
-          });
-        } else {
-          console.log("Creating doctor profile with ID:", newUserId);
-          await userService.createDoctor({
-            ...formData,
-            doctorID: newUserId,
-          });
-        }
-
-        loadUsers();
-        closeUserModal();
-        alert(`${userType === "patient" ? "Patient" : "Doctor"} created successfully. Temporary password: ${tempPassword}`);
-        return;
-      }
-
-      // Edit existing user (profile only, no auth credential change)
-      if (userType === "patient") {
-        await userService.updateUser(selectedUser.patientID, formData);
+        
+        if (authError) throw authError;
+        
+        // Create doctor profile
+        const { error: profileError } = await supabase
+          .from("Doctor")
+          .insert([
+            {
+              userID: authData.user.id,
+              name: formData.name,
+              email: formData.email,
+              contact_num: formData.contact_num,
+              specialty: formData.specialty,
+              createdAt: new Date().toISOString(),
+            },
+          ]);
+        
+        if (profileError) throw profileError;
+        
+        alert(`Doctor created successfully!\nTemporary Password: ${tempPassword}`);
+        loadDoctors();
       } else {
-        await userService.updateDoctor(selectedUser.doctorID, formData);
+        // Update doctor profile
+        const { error: updateError } = await supabase
+          .from("Doctor")
+          .update({
+            name: formData.name,
+            email: formData.email,
+            contact_num: formData.contact_num,
+            specialty: formData.specialty,
+          })
+          .eq("doctorID", selectedDoctor.doctorID);
+        
+        if (updateError) throw updateError;
+        
+        alert("Doctor updated successfully!");
+        loadDoctors();
       }
-
-      loadUsers();
-      closeUserModal();
-      alert(`${userType === "patient" ? "Patient" : "Doctor"} updated successfully!`);
-    } catch (error) {
-      console.error("Error saving user:", error);
-      alert("Failed to save user. Check console for details.");
+      
+      setShowModal(false);
+    } catch (e) {
+      console.error("Error submitting form:", e);
+      setError(e.message || "An error occurred");
+    } finally {
+      setIsSubmitting(false);
     }
-  };
-
-  // Handle delete user
-  const handleDeleteUser = async (userId) => {
-    if (!window.confirm(`Are you sure you want to delete this ${userType}?`)) return;
-
-    try {
-      if (userType === "patient") {
-        await userService.deleteUser(userId);
-      } else {
-        await userService.deleteDoctor(userId);
-      }
-      loadUsers();
-      alert(`${userType === "patient" ? "Patient" : "Doctor"} deleted successfully!`);
-    } catch (error) {
-      console.error("Error deleting user:", error);
-      alert("Failed to delete user. Check console for details.");
-    }
-  };
-
-  // Open add user modal
-  const openAddUserModal = () => {
-    setModalMode("add");
-    setSelectedUser(null);
-    setFormData({
-      name: "",
-      email: "",
-      contact_num: "",
-      age: "",
-      sex: "",
-      specialty: "",
-    });
-    setFormErrors({});
-    setShowUserModal(true);
-  };
-
-  // Open edit user modal
-  const openEditUserModal = (user) => {
-    setModalMode("edit");
-    setSelectedUser(user);
-    if (userType === "patient") {
-      setFormData({
-        name: user.name || "",
-        email: user.email || "",
-        contact_num: user.contact_num || "",
-        age: user.age || "",
-        sex: user.sex || "",
-        specialty: "",
-      });
-    } else {
-      setFormData({
-        name: user.name || "",
-        email: user.email || "",
-        contact_num: user.contact_num || "",
-        specialty: user.specialty || "",
-        age: "",
-        sex: "",
-      });
-    }
-    setFormErrors({});
-    setShowUserModal(true);
-  };
-
-  // Close user modal
-  const closeUserModal = () => {
-    setShowUserModal(false);
-    setSelectedUser(null);
-    setFormData({
-      name: "",
-      email: "",
-      contact_num: "",
-      age: "",
-      sex: "",
-      specialty: "",
-    });
-    setFormErrors({});
-  };
-
-  // Format date
-  const formatDate = (dateString) => {
-    if (!dateString) return "N/A";
-    return new Date(dateString).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
-
-  // Get status badge color
-  const getStatusBadge = (status) => {
-    const statusMap = {
-      upcoming: "bg-blue-100 text-blue-700",
-      pending: "bg-amber-100 text-amber-700",
-      completed: "bg-emerald-100 text-emerald-700",
-      cancelled: "bg-rose-100 text-rose-700",
-    };
-    return statusMap[status?.toLowerCase()] || "bg-slate-100 text-slate-600";
-  };
-
-  // Helper function to get unique doctors from appointments
-  const getUniqueDoctors = () => {
-    const doctors = new Map();
-    appointments.forEach((apt) => {
-      if (apt.doctorID && apt.doctorID.doctorID) {
-        doctors.set(apt.doctorID.doctorID, apt.doctorID);
-      }
-    });
-    return Array.from(doctors.values());
-  };
-
-  // Helper function to get unique patients from appointments
-  const getUniquePatients = () => {
-    const patients = new Map();
-    appointments.forEach((apt) => {
-      if (apt.patientID && apt.patientID.patientID) {
-        patients.set(apt.patientID.patientID, apt.patientID);
-      }
-    });
-    return Array.from(patients.values());
-  };
-
-  // Helper function to get unique specialties from appointments
-  const getUniqueSpecialties = () => {
-    const specialties = new Set();
-    appointments.forEach((apt) => {
-      if (apt.doctorID?.specialty) {
-        specialties.add(apt.doctorID.specialty);
-      }
-    });
-    return Array.from(specialties).sort();
-  };
-
-  // Helper function to get unique time slots from appointments
-  const getUniqueTimeSlots = () => {
-    const timeSlots = new Set();
-    appointments.forEach((apt) => {
-      if (apt.time_slot) {
-        timeSlots.add(apt.time_slot);
-      }
-    });
-    return Array.from(timeSlots).sort();
   };
 
   return (
     <main className="min-h-screen bg-white px-5 py-10 text-slate-800">
-      <div className="mx-auto w-full max-w-7xl space-y-6">
-        {/* Header */}
-        <header className="flex items-center justify-between">
-          <div className="space-y-2">
-            <h1 className="text-2xl font-semibold">Manage User Accounts</h1>
-            <p className="text-sm text-slate-600">
-              Search, view, and manage patient and doctor profiles.
-            </p>
-          </div>
-          {onLogout && (
-            <button
-              onClick={onLogout}
-              className="rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+      <div className="mx-auto grid w-full max-w-6xl grid-cols-1 gap-6 lg:grid-cols-[240px_1fr]">
+        {/* Sidebar */}
+        <aside className="rounded-lg border border-slate-200 bg-slate-50 p-4" style={{boxShadow: "0 1px 3px rgba(15, 23, 42, 0.08)"}}>
+          <p className="text-xs font-semibold uppercase tracking-wide text-hf-blue">Admin Panel</p>
+          <nav className="mt-4 space-y-2">
+            <NavLink
+              to="/admin/dashboard"
+              className={({ isActive }) =>
+                `block rounded-md px-3 py-2 text-sm font-semibold ${
+                  isActive ? "bg-hf-blue text-white" : "text-slate-700 hover:bg-slate-100"
+                }`
+              }
             >
-              Logout
-            </button>
-          )}
-        </header>
-
-        {/* Users Section */}
-        <div className="space-y-4">
-          {/* User Type Tabs */}
-          <div className="flex gap-2">
-            <button
-              onClick={() => setUserType("patient")}
-              className={`rounded-md px-4 py-2 text-sm font-semibold transition-colors ${
-                userType === "patient"
-                  ? "bg-emerald-700 text-white"
-                  : "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
-              }`}
+              Dashboard
+            </NavLink>
+            <NavLink
+              to="/admin/patients"
+              className={({ isActive }) =>
+                `block rounded-md px-3 py-2 text-sm font-semibold ${
+                  isActive ? "bg-hf-blue text-white" : "text-slate-700 hover:bg-slate-100"
+                }`
+              }
             >
-              Patients
-            </button>
-            <button
-              onClick={() => setUserType("doctor")}
-              className={`rounded-md px-4 py-2 text-sm font-semibold transition-colors ${
-                userType === "doctor"
-                  ? "bg-emerald-700 text-white"
-                  : "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
-              }`}
+              Patient Information
+            </NavLink>
+            <NavLink
+              to="/admin/appointments"
+              className={({ isActive }) =>
+                `block rounded-md px-3 py-2 text-sm font-semibold ${
+                  isActive ? "bg-hf-blue text-white" : "text-slate-700 hover:bg-slate-100"
+                }`
+              }
             >
-              Doctors
-            </button>
-          </div>
-
-          <h2 className="text-lg font-semibold">
-            Manage {userType === "patient" ? "Patient" : "Doctor"} Accounts
-          </h2>
-
-          {/* Search and Add Button */}
-          <section className="rounded-lg border border-slate-200 p-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-              <div className="w-full sm:max-w-sm">
-                <label
-                  htmlFor="user-search"
-                  className="block text-sm font-semibold text-slate-700"
-                >
-                  Search users
-                </label>
-                <div className="relative mt-1">
-                  <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                  <input
-                    id="user-search"
-                    type="text"
-                    placeholder="Search by name or email..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full rounded-md border border-slate-300 pl-10 pr-3 py-2 text-sm focus:border-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-200"
-                  />
-                </div>
-              </div>
+              Appointment Information
+            </NavLink>
+            <NavLink
+              to="/admin/doctors"
+              className={({ isActive }) =>
+                `block rounded-md px-3 py-2 text-sm font-semibold ${
+                  isActive ? "bg-hf-blue text-white" : "text-slate-700 hover:bg-slate-100"
+                }`
+              }
+            >
+              Doctor Information
+            </NavLink>
+            <NavLink
+              to="/admin/doctor-schedules"
+              className={({ isActive }) =>
+                `block rounded-md px-3 py-2 text-sm font-semibold ${
+                  isActive ? "bg-hf-blue text-white" : "text-slate-700 hover:bg-slate-100"
+                }`
+              }
+            >
+              Manage Doctor Schedule
+            </NavLink>
+            {onLogout && (
               <button
-                onClick={openAddUserModal}
-                className="flex items-center justify-center rounded-md bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800"
+                onClick={onLogout}
+                className="w-full mt-6 rounded-md border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100"
               >
-                <Plus className="mr-2 h-4 w-4" />
-                Add New {userType === "patient" ? "Patient" : "Doctor"}
+                Logout
               </button>
-            </div>
-          </section>
+            )}
+          </nav>
+        </aside>
 
-          {/* Users Table */}
-          <section className="overflow-hidden rounded-lg border border-slate-200">
-            <div className="bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700">
-              {userType === "patient" ? "Patients" : "Doctors"} ({filteredUsers.length})
-              {userLoading && (
-                <Loader className="ml-2 inline h-4 w-4 animate-spin" />
-              )}
+        {/* Main Content */}
+        <div className="space-y-6">
+          <header className="space-y-2">
+            <h1 className="text-3xl font-extrabold text-slate-900">Doctor Information</h1>
+            <p className="text-sm text-slate-600">Manage doctor profiles and credentials</p>
+          </header>
+
+          {error && (
+            <div className="flex items-start gap-3 text-red-600 text-sm p-3 bg-red-50 rounded border border-red-200">
+              <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+              <span>{error}</span>
             </div>
-            <div className="w-full overflow-x-auto">
-              {filteredUsers.length === 0 && !userLoading ? (
-                <div className="px-4 py-8 text-center text-sm text-slate-500">
-                  No {userType === "patient" ? "patients" : "doctors"} found. Try adjusting your search.
-                </div>
-              ) : (
+          )}
+
+          {/* Controls */}
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="relative flex-1 max-w-md">
+              <Search className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search by name or email..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-9 pr-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-300"
+              />
+            </div>
+            <button
+              onClick={handleAddClick}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-hf-blue hover:bg-bgdarkblue rounded-md transition"
+            >
+              <Plus className="w-4 h-4" />
+              Add Doctor
+            </button>
+          </div>
+
+          {/* Doctors Table */}
+          {loading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader className="w-6 h-6 animate-spin text-hf-blue" />
+              <span className="ml-2 text-slate-600">Loading doctors...</span>
+            </div>
+          ) : filteredDoctors.length === 0 ? (
+            <div className="text-center py-12 text-slate-500">
+              <p>No doctors found</p>
+            </div>
+          ) : (
+            <section className="rounded-lg border border-slate-200 overflow-hidden">
+              <div className="bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700">
+                Doctors ({filteredDoctors.length})
+              </div>
+              <div className="w-full overflow-x-auto">
                 <table className="w-full text-left text-sm">
                   <thead className="bg-slate-100 text-xs uppercase text-slate-500">
                     <tr>
                       <th className="px-4 py-3 font-semibold">Name</th>
                       <th className="px-4 py-3 font-semibold">Email</th>
-                      {userType === "patient" ? (
-                        <>
-                          <th className="px-4 py-3 font-semibold">Contact</th>
-                          <th className="px-4 py-3 font-semibold">Age</th>
-                          <th className="px-4 py-3 font-semibold">Sex</th>
-                        </>
-                      ) : (
-                        <>
-                          <th className="px-4 py-3 font-semibold">Specialty</th>
-                          <th className="px-4 py-3 font-semibold">Contact</th>
-                        </>
-                      )}
-                      <th className="px-4 py-3 font-semibold">Joined</th>
-                      <th className="px-4 py-3 font-semibold">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-200">
-                    {filteredUsers.map((user) => (
-                      <tr
-                        key={userType === "patient" ? user.patientID : user.doctorID}
-                        className="hover:bg-slate-50"
-                      >
-                        <td className="px-4 py-3 font-medium">{user.name}</td>
-                        <td className="px-4 py-3">{user.email}</td>
-                        {userType === "patient" ? (
-                          <>
-                            <td className="px-4 py-3">{user.contact_num || "N/A"}</td>
-                            <td className="px-4 py-3">{user.age || "N/A"}</td>
-                            <td className="px-4 py-3">
-                              {user.sex ? user.sex.charAt(0).toUpperCase() : "N/A"}
-                            </td>
-                          </>
-                        ) : (
-                          <>
-                            <td className="px-4 py-3">{user.specialty || "N/A"}</td>
-                            <td className="px-4 py-3">{user.contact_num || "N/A"}</td>
-                          </>
-                        )}
-                        <td className="px-4 py-3 text-xs text-slate-600">
-                          {formatDate(
-                            userType === "patient" ? user.date_created : user.date_created
-                          )}
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex flex-wrap gap-2">
-                            <button
-                              onClick={() => openEditUserModal(user)}
-                              className="flex items-center rounded-md border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-                            >
-                              <Edit2 className="mr-1 h-3 w-3" />
-                              Edit
-                            </button>
-                            <button
-                              onClick={() =>
-                                handleDeleteUser(
-                                  userType === "patient"
-                                    ? user.patientID
-                                    : user.doctorID
-                                )
-                              }
-                              className="flex items-center rounded-md border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-50"
-                            >
-                              <Trash2 className="mr-1 h-3 w-3" />
-                              Delete
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
-          </section>
-        </div>
-
-        {/* Appointments Section */}
-        <div className="space-y-4">
-          <h2 className="text-lg font-semibold">Appointments</h2>
-
-          {/* Search and Filter */}
-          <section className="rounded-lg border border-slate-200 p-4 space-y-4">
-            {/* Search Bar */}
-            <div className="w-full">
-              <label
-                htmlFor="apt-search"
-                className="block text-sm font-semibold text-slate-700"
-              >
-                Search appointments
-              </label>
-              <div className="relative mt-1">
-                <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                <input
-                  id="apt-search"
-                  type="text"
-                  placeholder="Search by patient or doctor name..."
-                  value={appointmentSearch}
-                  onChange={(e) => setAppointmentSearch(e.target.value)}
-                  className="w-full rounded-md border border-slate-300 pl-10 pr-3 py-2 text-sm focus:border-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-200"
-                />
-              </div>
-            </div>
-
-            {/* Filter Row 1: Status, Doctor, Patient */}
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              <div>
-                <label
-                  htmlFor="apt-status-filter"
-                  className="block text-sm font-semibold text-slate-700"
-                >
-                  Status
-                </label>
-                <select
-                  id="apt-status-filter"
-                  value={appointmentFilter}
-                  onChange={(e) => setAppointmentFilter(e.target.value)}
-                  className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-200"
-                >
-                  <option value="all">All Statuses</option>
-                  <option value="upcoming">Upcoming</option>
-                  <option value="pending">Pending</option>
-                  <option value="completed">Completed</option>
-                  <option value="cancelled">Cancelled</option>
-                </select>
-              </div>
-
-              <div>
-                <label
-                  htmlFor="apt-doctor-filter"
-                  className="block text-sm font-semibold text-slate-700"
-                >
-                  Doctor
-                </label>
-                <select
-                  id="apt-doctor-filter"
-                  value={filterDoctor}
-                  onChange={(e) => setFilterDoctor(e.target.value)}
-                  className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-200"
-                >
-                  <option value="">All Doctors</option>
-                  {getUniqueDoctors().map((doctor) => (
-                    <option key={doctor.doctorID} value={doctor.doctorID}>
-                      {doctor.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label
-                  htmlFor="apt-patient-filter"
-                  className="block text-sm font-semibold text-slate-700"
-                >
-                  Patient
-                </label>
-                <select
-                  id="apt-patient-filter"
-                  value={filterPatient}
-                  onChange={(e) => setFilterPatient(e.target.value)}
-                  className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-200"
-                >
-                  <option value="">All Patients</option>
-                  {getUniquePatients().map((patient) => (
-                    <option key={patient.patientID} value={patient.patientID}>
-                      {patient.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            {/* Filter Row 2: Specialty, Time Slot, Date Range */}
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              <div>
-                <label
-                  htmlFor="apt-specialty-filter"
-                  className="block text-sm font-semibold text-slate-700"
-                >
-                  Specialty
-                </label>
-                <select
-                  id="apt-specialty-filter"
-                  value={filterSpecialty}
-                  onChange={(e) => setFilterSpecialty(e.target.value)}
-                  className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-200"
-                >
-                  <option value="">All Specialties</option>
-                  {getUniqueSpecialties().map((specialty) => (
-                    <option key={specialty} value={specialty}>
-                      {specialty}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label
-                  htmlFor="apt-time-filter"
-                  className="block text-sm font-semibold text-slate-700"
-                >
-                  Time Slot
-                </label>
-                <select
-                  id="apt-time-filter"
-                  value={filterTimeSlot}
-                  onChange={(e) => setFilterTimeSlot(e.target.value)}
-                  className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-200"
-                >
-                  <option value="">All Times</option>
-                  {getUniqueTimeSlots().map((timeSlot) => (
-                    <option key={timeSlot} value={timeSlot}>
-                      {timeSlot}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-slate-700">
-                  Date Range
-                </label>
-                <div className="flex gap-2 mt-1">
-                  <input
-                    type="date"
-                    value={filterDateFrom}
-                    onChange={(e) => setFilterDateFrom(e.target.value)}
-                    className="flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-200"
-                    placeholder="From"
-                  />
-                  <input
-                    type="date"
-                    value={filterDateTo}
-                    onChange={(e) => setFilterDateTo(e.target.value)}
-                    className="flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-200"
-                    placeholder="To"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Clear Filters Button */}
-            {(appointmentFilter !== "all" ||
-              filterDoctor ||
-              filterPatient ||
-              filterSpecialty ||
-              filterTimeSlot ||
-              filterDateFrom ||
-              filterDateTo ||
-              appointmentSearch) && (
-              <button
-                onClick={() => {
-                  setAppointmentFilter("all");
-                  setFilterDoctor("");
-                  setFilterPatient("");
-                  setFilterSpecialty("");
-                  setFilterTimeSlot("");
-                  setFilterDateFrom("");
-                  setFilterDateTo("");
-                  setAppointmentSearch("");
-                }}
-                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-              >
-                Clear All Filters
-              </button>
-            )}
-          </section>
-
-          {/* Appointments Table */}
-          <section className="overflow-hidden rounded-lg border border-slate-200">
-            <div className="bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700">
-              Appointments ({filteredAppointments.length})
-              {appointmentLoading && (
-                <Loader className="ml-2 inline h-4 w-4 animate-spin" />
-              )}
-            </div>
-            <div className="w-full overflow-x-auto">
-              {filteredAppointments.length === 0 && !appointmentLoading ? (
-                <div className="px-4 py-8 text-center text-sm text-slate-500">
-                  No appointments found. Try adjusting your search or filters.
-                </div>
-              ) : (
-                <table className="w-full text-left text-sm">
-                  <thead className="bg-slate-100 text-xs uppercase text-slate-500">
-                    <tr>
-                      <th className="px-4 py-3 font-semibold">Patient</th>
-                      <th className="px-4 py-3 font-semibold">Doctor</th>
                       <th className="px-4 py-3 font-semibold">Specialty</th>
-                      <th className="px-4 py-3 font-semibold">Date & Time</th>
-                      <th className="px-4 py-3 font-semibold">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-200">
-                    {filteredAppointments.map((appointment) => (
-                      <tr
-                        key={appointment.appointmentID}
-                        className="hover:bg-slate-50"
-                      >
-                        <td className="px-4 py-3">
-                          <div>
-                            <p className="font-medium">
-                              {appointment.patientID?.name || "N/A"}
-                            </p>
-                            <p className="text-xs text-slate-600">
-                              {appointment.patientID?.email}
-                            </p>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3">
-                          <p className="font-medium">
-                            {appointment.doctorID?.name || "N/A"}
-                          </p>
-                        </td>
-                        <td className="px-4 py-3 text-xs">
-                          {appointment.doctorID?.specialty || "N/A"}
-                        </td>
-                        <td className="px-4 py-3">
-                          <p className="text-xs">
-                            {appointment.appointment_date &&
-                              new Date(
-                                appointment.appointment_date
-                              ).toLocaleDateString("en-US", {
-                                month: "short",
-                                day: "numeric",
-                                year: "numeric",
-                              })}
-                          </p>
-                          <p className="text-xs text-slate-600">
-                            {appointment.time_slot || "N/A"}
-                          </p>
-                        </td>
-                        <td className="px-4 py-3">
-                          <span
-                            className={`rounded-full px-2 py-1 text-xs font-semibold ${getStatusBadge(
-                              appointment.status
-                            )}`}
-                          >
-                            {appointment.status || "Unknown"}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
-          </section>
-        </div>
-
-        {/* Schedule Approvals Section */}
-        <div className="space-y-4">
-          <h2 className="text-lg font-semibold">Schedule Approvals</h2>
-
-          <section className="overflow-hidden rounded-lg border border-slate-200">
-            <div className="bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700">
-              Pending Schedule Approvals ({submittedSchedules.filter(s => s.status === 'For Approval').length})
-              {scheduleLoading && (
-                <Loader className="ml-2 inline h-4 w-4 animate-spin" />
-              )}
-            </div>
-            <div className="w-full overflow-x-auto">
-              {submittedSchedules.filter(s => s.status === 'For Approval').length === 0 && !scheduleLoading ? (
-                <div className="px-4 py-8 text-center text-sm text-slate-500">
-                  No schedules pending approval.
-                </div>
-              ) : (
-                <table className="w-full text-left text-sm">
-                  <thead className="bg-slate-100 text-xs uppercase text-slate-500">
-                    <tr>
-                      <th className="px-4 py-3 font-semibold">Doctor</th>
-                      <th className="px-4 py-3 font-semibold">Submitted</th>
-                      <th className="px-4 py-3 font-semibold">Timeslots</th>
+                      <th className="px-4 py-3 font-semibold">Contact</th>
                       <th className="px-4 py-3 font-semibold">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200">
-                    {submittedSchedules.filter(s => s.status === 'For Approval').map((schedule) => (
-                      <tr key={schedule.submittedScheduleID} className="hover:bg-slate-50">
+                    {filteredDoctors.map((doctor) => (
+                      <tr key={doctor.doctorID} className="hover:bg-slate-50">
                         <td className="px-4 py-3">
-                          <div className="font-medium">{schedule.Doctor?.name || 'Unknown'}</div>
-                          <div className="text-xs text-slate-600">{schedule.Doctor?.email || ''}</div>
-                        </td>
-                        <td className="px-4 py-3 text-xs text-slate-600">
-                          {new Date(schedule.submittedAt).toLocaleDateString()}
+                          <p className="font-semibold">{doctor.name || "—"}</p>
                         </td>
                         <td className="px-4 py-3">
-                          <div className="space-y-1">
-                            {schedule.scheduleData.map((slot, index) => (
-                              <div key={index} className="text-xs bg-slate-100 rounded px-2 py-1">
-                                {new Date(slot.date).toLocaleDateString()} - {slot.time}
-                              </div>
-                            ))}
-                          </div>
+                          <p className="text-slate-600">{doctor.email || "—"}</p>
+                        </td>
+                        <td className="px-4 py-3">
+                          <p className="font-medium">{doctor.specialty || "—"}</p>
+                        </td>
+                        <td className="px-4 py-3">
+                          <p className="text-slate-600">{doctor.contact_num || "—"}</p>
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex gap-2">
                             <button
-                              onClick={() => handleApproveSchedule(schedule.submittedScheduleID)}
-                              className="flex items-center rounded-md bg-green-600 px-3 py-1 text-xs font-semibold text-white hover:bg-green-700"
+                              onClick={() => handleEditClick(doctor)}
+                              className="p-1 text-slate-600 hover:bg-slate-100 rounded transition"
+                              title="Edit"
                             >
-                              <Check className="mr-1 h-3 w-3" />
-                              Approve
+                              <Edit2 className="w-4 h-4" />
                             </button>
                             <button
-                              onClick={() => handleRejectSchedule(schedule.submittedScheduleID)}
-                              className="flex items-center rounded-md bg-red-600 px-3 py-1 text-xs font-semibold text-white hover:bg-red-700"
+                              onClick={() => handleDeleteClick(doctor)}
+                              className="p-1 text-red-600 hover:bg-red-50 rounded transition"
+                              title="Delete"
                             >
-                              <XIcon className="mr-1 h-3 w-3" />
-                              Reject
+                              <Trash2 className="w-4 h-4" />
                             </button>
                           </div>
                         </td>
@@ -993,161 +367,137 @@ const ManageUser = ({ admin, onLogout }) => {
                     ))}
                   </tbody>
                 </table>
-              )}
-            </div>
-          </section>
+              </div>
+            </section>
+          )}
         </div>
       </div>
 
-      {/* User Modal */}
-      {showUserModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
-          <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-lg">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold">
-                {modalMode === "add"
-                  ? `Add New ${userType === "patient" ? "Patient" : "Doctor"}`
-                  : `Edit ${userType === "patient" ? "Patient" : "Doctor"}`}
+      {/* Modal */}
+      {showModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-lg p-6 max-w-md w-full mx-4">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold text-slate-900">
+                {modalMode === "add" ? "Add New Doctor" : "Edit Doctor"}
               </h2>
               <button
-                onClick={closeUserModal}
-                className="text-slate-400 hover:text-slate-600"
+                onClick={() => setShowModal(false)}
+                className="p-1 hover:bg-slate-100 rounded"
               >
-                <X className="h-5 w-5" />
+                <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                handleSaveUser();
-              }}
-              className="mt-4 space-y-4"
-            >
+            <form onSubmit={handleFormSubmit} className="space-y-4">
+              {/* Name */}
               <div>
-                <label className="block text-sm font-semibold text-slate-700">
-                  Full Name
+                <label className="block text-sm font-semibold text-slate-700 mb-1">
+                  Name *
                 </label>
                 <input
                   type="text"
                   value={formData.name}
-                  onChange={(e) =>
-                    setFormData({ ...formData, name: e.target.value })
-                  }
-                  className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-200"
-                  required
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-300"
+                  disabled={isSubmitting}
                 />
                 {formErrors.name && (
-                  <p className="mt-1 text-xs text-rose-600">{formErrors.name}</p>
+                  <p className="text-xs text-red-600 mt-1">{formErrors.name}</p>
                 )}
               </div>
 
+              {/* Email */}
               <div>
-                <label className="block text-sm font-semibold text-slate-700">
-                  Email Address
+                <label className="block text-sm font-semibold text-slate-700 mb-1">
+                  Email *
                 </label>
                 <input
                   type="email"
                   value={formData.email}
-                  onChange={(e) =>
-                    setFormData({ ...formData, email: e.target.value })
-                  }
-                  className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-200"
-                  required
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-300"
+                  disabled={isSubmitting || modalMode === "edit"}
                 />
                 {formErrors.email && (
-                  <p className="mt-1 text-xs text-rose-600">
-                    {formErrors.email}
-                  </p>
+                  <p className="text-xs text-red-600 mt-1">{formErrors.email}</p>
                 )}
               </div>
 
+              {/* Specialty */}
               <div>
-                <label className="block text-sm font-semibold text-slate-700">
+                <label className="block text-sm font-semibold text-slate-700 mb-1">
+                  Specialty *
+                </label>
+                <select
+                  value={formData.specialty}
+                  onChange={(e) => setFormData({ ...formData, specialty: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-300"
+                  disabled={isSubmitting}
+                >
+                  <option value="">Select a specialty...</option>
+                  <option value="Internal Medicine">Internal Medicine</option>
+                  <option value="Dermatologist">Dermatologist</option>
+                  <option value="Pediatrician">Pediatrician</option>
+                  <option value="Gynecology">Gynecology</option>
+                  <option value="ENT Specialist">ENT Specialist</option>
+                  <option value="Family Medicine">Family Medicine</option>
+                  <option value="Ophthalmologist">Ophthalmologist</option>
+                  <option value="Preventive Medicine">Preventive Medicine</option>
+                </select>
+                {formErrors.specialty && (
+                  <p className="text-xs text-red-600 mt-1">{formErrors.specialty}</p>
+                )}
+              </div>
+
+              {/* Contact */}
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1">
                   Contact Number
                 </label>
                 <input
                   type="tel"
                   value={formData.contact_num}
-                  onChange={(e) =>
-                    setFormData({ ...formData, contact_num: e.target.value })
-                  }
-                  className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+                  onChange={(e) => setFormData({ ...formData, contact_num: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-300"
+                  disabled={isSubmitting}
+                  placeholder="10-digit number"
                 />
+                {formErrors.contact_num && (
+                  <p className="text-xs text-red-600 mt-1">{formErrors.contact_num}</p>
+                )}
               </div>
 
-              {userType === "patient" ? (
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-sm font-semibold text-slate-700">
-                      Age
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      max="150"
-                      value={formData.age}
-                      onChange={(e) =>
-                        setFormData({ ...formData, age: e.target.value })
-                      }
-                      className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-200"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-slate-700">
-                      Sex
-                    </label>
-                    <select
-                      value={formData.sex}
-                      onChange={(e) =>
-                        setFormData({ ...formData, sex: e.target.value })
-                      }
-                      className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-200"
-                    >
-                      <option value="">Select</option>
-                      <option value="male">Male</option>
-                      <option value="female">Female</option>
-                      <option value="other">Other</option>
-                    </select>
-                  </div>
-                </div>
-              ) : (
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700">
-                    Specialty
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.specialty}
-                    onChange={(e) =>
-                      setFormData({ ...formData, specialty: e.target.value })
-                    }
-                    className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-200"
-                    required
-                  />
-                  {formErrors.specialty && (
-                    <p className="mt-1 text-xs text-rose-600">
-                      {formErrors.specialty}
-                    </p>
-                  )}
+              {/* Error message */}
+              {error && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded text-sm text-red-600">
+                  {error}
                 </div>
               )}
 
-              <div className="flex gap-3 pt-4">
-                <button
-                  type="submit"
-                  className="flex-1 rounded-md bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800"
-                >
-                  {modalMode === "add"
-                    ? `Create ${userType === "patient" ? "Patient" : "Doctor"}`
-                    : `Update ${userType === "patient" ? "Patient" : "Doctor"}`}
-                </button>
+              {/* Buttons */}
+              <div className="flex gap-3 pt-4 border-t border-slate-200">
                 <button
                   type="button"
-                  onClick={closeUserModal}
-                  className="flex-1 rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                  onClick={() => setShowModal(false)}
+                  disabled={isSubmitting}
+                  className="flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
                 >
                   Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="flex-1 rounded-md bg-hf-blue px-3 py-2 text-sm font-semibold text-white hover:bg-bgdarkblue disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {isSubmitting ? (
+                    <>
+                      <Loader className="w-4 h-4 animate-spin" />
+                      <span>Saving...</span>
+                    </>
+                  ) : (
+                    <span>{modalMode === "add" ? "Add Doctor" : "Update Doctor"}</span>
+                  )}
                 </button>
               </div>
             </form>

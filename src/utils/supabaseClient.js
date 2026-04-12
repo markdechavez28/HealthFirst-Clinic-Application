@@ -4,7 +4,21 @@ import { createClient } from "@supabase/supabase-js";
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "https://lbvvikesrysqaqplysgy.supabase.co";
 const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "sb_publishable_z_D5M1BjGNmITvCS3IXOaA_gYE5UOW6";
 
-export const supabase = createClient(supabaseUrl, supabaseKey);
+// Separate clients for patient and doctor to enable simultaneous sessions
+export const supabasePatient = createClient(supabaseUrl, supabaseKey, {
+  auth: {
+    storageKey: "sb-patient-auth-token",
+  },
+});
+
+export const supabaseDoctor = createClient(supabaseUrl, supabaseKey, {
+  auth: {
+    storageKey: "sb-doctor-auth-token",
+  },
+});
+
+// Legacy export for backward compatibility
+export const supabase = supabasePatient;
 
 // Database service functions for Users
 export const userService = {

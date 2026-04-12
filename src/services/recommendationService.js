@@ -1,4 +1,4 @@
-import { supabase } from "../utils/supabaseClient";
+import { supabasePatient as supabase } from "../utils/supabaseClient";
 import { getTopRecommendedDoctors } from "../utils/recommendationEngine";
 
 // Import appointment type to specialty mapping (without Dr. prefix for DB matching)
@@ -102,7 +102,7 @@ export async function getRecommendedDoctorsForPatient(patientID, appointmentType
 
     if (appointmentError) throw appointmentError;
 
-    console.log("📊 appointments fetched:", appointments?.length || 0, appointments);
+    console.log("appointments fetched:", appointments?.length || 0, appointments);
 
     // Fetch all available doctors
     const { data: doctors, error: doctorError } = await supabase
@@ -111,15 +111,15 @@ export async function getRecommendedDoctorsForPatient(patientID, appointmentType
 
     if (doctorError) throw doctorError;
 
-    console.log("👨‍⚕️ doctors available:", doctors?.length || 0, doctors);
+    console.log("doctors available:", doctors?.length || 0, doctors);
 
     if (!doctors || doctors.length === 0) {
-      console.warn("⚠️ no doctors in database");
+      console.warn("No doctors in database");
       return [];
     }
 
     if (!appointments || appointments.length === 0) {
-      console.warn("⚠️ no appointments for this patient - returning specialty matches only");
+      console.warn("No appointments for this patient - returning specialty matches only");
       // If no history, return specialty matches based on appointment type
       const matchingDoctors = doctors.filter(doc =>
         recommendedDoctorNames.includes(doc.name.toLowerCase())
@@ -145,7 +145,7 @@ export async function getRecommendedDoctorsForPatient(patientID, appointmentType
       status: appt.status,
     }));
 
-    console.log("📋 appointment history formatted:", appointmentHistory);
+    console.log("appointment history formatted:", appointmentHistory);
 
     // Normalize doctor format for the engine
     // Filter to only include doctors recommended for this appointment type
@@ -159,7 +159,7 @@ export async function getRecommendedDoctorsForPatient(patientID, appointmentType
         email: doc.email,
       }));
 
-    console.log("👥 available doctors for this appointment type:", availableDoctors);
+    console.log("available doctors for this appointment type:", availableDoctors);
 
     // If no matched doctors, return all doctors (fallback)
     const docsToUse = availableDoctors.length > 0 ? availableDoctors : 

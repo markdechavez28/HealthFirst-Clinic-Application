@@ -1,7 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
-import { supabase } from "./utils/supabaseClient.js";
+import { supabasePatient, supabaseDoctor } from "./utils/supabaseClient.js";
 import { createMockAppointmentHistory } from "./services/patientService";
+import { NotificationProvider } from "./context/NotificationContext";
+import NotificationContainer from "./components/NotificationContainer";
 
 // Patient pages
 import LoginPage from "./pages/LoginPage.jsx";
@@ -21,10 +23,15 @@ import DoctorPatients from "./pages/DoctorPatients";
 
 // Admin pages
 import AdminLogin from "./pages/AdminLogin.jsx";
+import AdminDashboard from "./pages/AdminDashboard.jsx";
+import AdminPatients from "./pages/AdminPatients.jsx";
+import AdminAppointments from "./pages/AdminAppointments.jsx";
 import ManageUser from "./pages/ManageUser.jsx";
+import AdminDoctorSchedules from "./pages/AdminDoctorSchedules.jsx";
 
-// Home page
+// Common pages
 import HomePage from "./pages/HomePage.jsx";
+import TermsAndServices from "./pages/TermsAndServices.jsx";
 
 // Local storage utilities
 const LS_KEYS = {
@@ -55,14 +62,19 @@ function PatientRoutes() {
   const location = useLocation();
   const [session, setSession] = useState(null);
   const [patient, setPatient] = useState({});
+  const [isLoading, setIsLoading] = useState(true);
 
-  // keep synced with Supabase auth
+  // keep synced with Supabase auth (patient client)
   useEffect(() => {
     // initial session
-    supabase.auth.getSession().then(({ data }) => setSession(data.session));
+    supabasePatient.auth.getSession().then(({ data }) => {
+      setSession(data.session);
+      setIsLoading(false);
+    });
 
-    const { data: listener } = supabase.auth.onAuthStateChange((event, sess) => {
+    const { data: listener } = supabasePatient.auth.onAuthStateChange((event, sess) => {
       setSession(sess);
+      setIsLoading(false);
     });
     return () => {
       listener.subscription.unsubscribe();
@@ -74,7 +86,7 @@ function PatientRoutes() {
     const loadProfile = async () => {
       if (session?.user) {
         console.log("Loading patient profile for user ID:", session.user.id);
-        const { data, error } = await supabase
+        const { data, error } = await supabasePatient
           .from("Patient")
           .select("*")
           .eq("patientID", session.user.id)
@@ -94,37 +106,52 @@ function PatientRoutes() {
   }, [session]);
 
   useEffect(() => {
-    if (session?.user && (location.pathname === "/patient/login" || location.pathname === "/patient/register")) {
-      navigate("/patient/dashboard", { replace: true });
+    if (isLoading) return; // Wait for auth to load
+
+    // If patient is logged in
+    if (session?.user) {
+      // Patient has a session, allow access to patient routes
+      return;
+    } else {
+      // No session - redirect to login only for protected pages
+      if (location.pathname.startsWith("/patient/dashboard")) {
+        navigate("/patient/login", { replace: true });
+      }
     }
-    if (!session?.user && location.pathname.startsWith("/patient/dashboard")) {
-      navigate("/patient/login", { replace: true });
-    }
-  }, [location.pathname, session, navigate]);
+  }, [location.pathname, session, navigate, isLoading]);
 
   const onLogin = async ({ email, password }) => {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    // Validate inputs to prevent empty credentials
+    if (!email || !email.trim()) {
+      return { ok: false, message: "Email is required." };
+    }
+    if (!password || !password.trim()) {
+      return { ok: false, message: "Password is required." };
+    }
+    
+    const { data, error } = await supabasePatient.auth.signInWithPassword({ email, password });
     if (error) return { ok: false, message: error.message };
     const userId = data.user.id;
-    const { data: patient, error: patientError } = await supabase
+    const { data: patient, error: patientError } = await supabasePatient
       .from("Patient")
       .select("patientID")
       .eq("patientID", userId)
       .maybeSingle();
     if (patientError || !patient) {
-      await supabase.auth.signOut();
+      await supabasePatient.auth.signOut();
       return { ok: false, message: "Invalid credentials." };
     }
+    
     navigate("/patient/dashboard");
     return { ok: true };
   };
 
   const onRegister = async ({ fullName, email, contactNumber, password }) => {
-    const { data, error } = await supabase.auth.signUp({ email, password });
+    const { data, error } = await supabasePatient.auth.signUp({ email, password });
     if (error) return { ok: false, message: error.message };
     const userId = data.user?.id;
     if (userId) {
-      const { error: err2 } = await supabase.from("Patient").insert({
+      const { error: err2 } = await supabasePatient.from("Patient").insert({
         patientID: userId,
         name: fullName,
         email,
@@ -139,9 +166,20 @@ function PatientRoutes() {
   };
 
   const onLogout = async () => {
-    await supabase.auth.signOut();
+    await supabasePatient.auth.signOut();
     navigate("/patient/login");
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-100">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-hf-blue"></div>
+          <p className="mt-4 text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <Routes>
@@ -162,12 +200,20 @@ function DoctorRoutes() {
   const location = useLocation();
   const [session, setSession] = useState(null);
   const [doctor, setDoctor] = useState({});
+  const [isLoading, setIsLoading] = useState(true);
 
-  // sync with Supabase auth
+  // sync with Supabase auth (doctor client)
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => setSession(data.session));
-    const { data: listener } = supabase.auth.onAuthStateChange((event, sess) => {
+    console.log("DoctorRoutes: Setting up auth listener...");
+    supabaseDoctor.auth.getSession().then(({ data }) => {
+      console.log("DoctorRoutes: getSession returned:", data.session ? "session found" : "no session");
+      setSession(data.session);
+      setIsLoading(false);
+    });
+    const { data: listener } = supabaseDoctor.auth.onAuthStateChange((event, sess) => {
+      console.log("DoctorRoutes: onAuthStateChange fired with event:", event, "session exists:", !!sess);
       setSession(sess);
+      setIsLoading(false);
     });
     return () => listener.subscription.unsubscribe();
   }, []);
@@ -177,7 +223,7 @@ function DoctorRoutes() {
     const loadProfile = async () => {
       if (session?.user) {
         console.log("Loading doctor profile for user ID:", session.user.id);
-        const { data, error } = await supabase
+        const { data, error } = await supabaseDoctor
           .from("Doctor")
           .select("*")
           .eq("doctorID", session.user.id)
@@ -197,44 +243,88 @@ function DoctorRoutes() {
   }, [session]);
 
   useEffect(() => {
-    if (session?.user && location.pathname === "/doctor/login") {
-      navigate("/doctor/dashboard", { replace: true });
+    if (isLoading) {
+      console.log("DoctorRoutes: Still loading auth...");
+      return;
     }
-    if (!session?.user && location.pathname.startsWith("/doctor/dashboard")) {
-      navigate("/doctor/login", { replace: true });
+
+    // If doctor is logged in
+    if (session?.user) {
+      console.log("DoctorRoutes: Doctor session valid, user ID:", session.user.id);
+      return;
+    } else {
+      // No session - redirect to login only for protected pages
+      console.log("DoctorRoutes: No session, path:", location.pathname);
+      if (location.pathname.startsWith("/doctor/dashboard") ||
+          location.pathname.startsWith("/doctor/vc") ||
+          location.pathname.startsWith("/doctor/schedule")) {
+        console.log("DoctorRoutes: Redirecting to login");
+        navigate("/doctor/login", { replace: true });
+      }
     }
-    if (!session?.user && location.pathname.startsWith("/doctor/appointments")) {
-      navigate("/doctor/login", { replace: true });
-    }
-    if (!session?.user && location.pathname.startsWith("/doctor/vc")) {
-      navigate("/doctor/login", { replace: true });
-    }
-    if (!session?.user && location.pathname.startsWith("/doctor/schedule")) {
-      navigate("/doctor/login", { replace: true });
-    }
-  }, [location.pathname, session, navigate]);
+  }, [location.pathname, session, navigate, isLoading]);
 
   const onLogin = async ({ email, password }) => {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) return { ok: false, message: error.message };
+    // Validate inputs to prevent empty credentials
+    if (!email || !email.trim()) {
+      return { ok: false, message: "Email is required." };
+    }
+    if (!password || !password.trim()) {
+      return { ok: false, message: "Password is required." };
+    }
+    
+    console.log("DoctorRoutes onLogin: Attempting to sign in email:", email);
+    const { data, error } = await supabaseDoctor.auth.signInWithPassword({ email, password });
+    if (error) {
+      console.error("DoctorRoutes onLogin: Auth error:", error.message);
+      return { ok: false, message: error.message };
+    }
+    
+    console.log("DoctorRoutes onLogin: Auth success, checking doctor record...");
     const userId = data.user.id;
-    const { data: doctor, error: doctorError } = await supabase
+    const { data: doctor, error: doctorError } = await supabaseDoctor
       .from("Doctor")
       .select("doctorID")
       .eq("doctorID", userId)
       .maybeSingle();
     if (doctorError || !doctor) {
-      await supabase.auth.signOut();
+      console.error("DoctorRoutes onLogin: Doctor record not found:", doctorError);
+      await supabaseDoctor.auth.signOut();
       return { ok: false, message: "Invalid credentials." };
     }
+    
+    console.log("DoctorRoutes onLogin: Verifying session...");
+    // Verify session is properly stored before navigating
+    const { data: { session: verifySession } } = await supabaseDoctor.auth.getSession();
+    if (!verifySession) {
+      console.error("DoctorRoutes onLogin: Session verification failed");
+      return { ok: false, message: "Session verification failed. Please try again." };
+    }
+    
+    console.log("DoctorRoutes onLogin: Session verified, waiting for state update...");
+    // Small delay to ensure auth state listener has fired and updated React state
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    console.log("DoctorRoutes onLogin: Navigating to dashboard");
     navigate("/doctor/dashboard");
     return { ok: true };
   };
 
   const onLogout = async () => {
-    await supabase.auth.signOut();
+    await supabaseDoctor.auth.signOut();
     navigate("/doctor/login");
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-100">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-hf-blue"></div>
+          <p className="mt-4 text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <Routes>
@@ -281,11 +371,35 @@ function AdminRoutes() {
     navigate("/admin/login");
   };
 
+  // Protected paths that require authentication
+  const protectedPaths = [
+    "/admin/dashboard",
+    "/admin/patients",
+    "/admin/appointments",
+    "/admin/doctors",
+    "/admin/doctor-schedules",
+  ];
+
+  useEffect(() => {
+    // Redirect to dashboard if accessing admin but not on login page
+    if (session.isAuthed && location.pathname === "/admin/login") {
+      navigate("/admin/dashboard", { replace: true });
+    }
+    // Redirect to login if accessing protected path without auth
+    if (!session.isAuthed && protectedPaths.some(p => location.pathname.startsWith(p))) {
+      navigate("/admin/login", { replace: true });
+    }
+  }, [location.pathname, session, navigate]);
+
   return (
     <Routes>
       <Route path="login" element={<AdminLogin onLogin={onLogin} />} />
-      <Route path="manage" element={<ManageUser admin={session.admin} onLogout={onLogout} />} />
-      <Route path="" element={<Navigate to="/admin/login" replace />} />
+      <Route path="dashboard" element={<AdminDashboard onLogout={onLogout} />} />
+      <Route path="patients" element={<AdminPatients onLogout={onLogout} />} />
+      <Route path="appointments" element={<AdminAppointments onLogout={onLogout} />} />
+      <Route path="doctors" element={<ManageUser admin={session.admin} onLogout={onLogout} />} />
+      <Route path="doctor-schedules" element={<AdminDoctorSchedules admin={session.admin} onLogout={onLogout} />} />
+      <Route path="" element={<Navigate to="/admin/dashboard" replace />} />
     </Routes>
   );
 }
@@ -293,23 +407,26 @@ function AdminRoutes() {
 export default function App() {
   // Ensure home page is always accessible
   return (
-    <div className="font-hammersmith">
-      <Routes>
-        {/* ROOT HANDLER - Always show home page */}
-        <Route path="/" element={<HomePage />} />
+    <NotificationProvider>
+      <div className="font-hammersmith">
+        <NotificationContainer />
+        <Routes>
+          {/* ROOT HANDLER - Always show home page */}
+          <Route path="/" element={<HomePage />} />
 
-        {/* Patient Routes */}
-        <Route path="/patient/*" element={<PatientRoutes />} />
+          {/* Patient Routes */}
+          <Route path="/patient/*" element={<PatientRoutes />} />
 
-        {/* Doctor Routes */}
-        <Route path="/doctor/*" element={<DoctorRoutes />} />
+          {/* Doctor Routes */}
+          <Route path="/doctor/*" element={<DoctorRoutes />} />
 
-        {/* Admin Routes */}
-        <Route path="/admin/*" element={<AdminRoutes />} />
+          {/* Admin Routes */}
+          <Route path="/admin/*" element={<AdminRoutes />} />
 
-        {/* SAFETY NET */}
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </div>
+          {/* SAFETY NET */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </div>
+    </NotificationProvider>
   );
 }

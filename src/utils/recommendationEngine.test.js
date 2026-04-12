@@ -87,9 +87,9 @@ export function testGetRecommendedDoctors() {
   // Verify Dr. Mark De Chavez is #1
   const topDoctor = result[0];
   console.log(
-    `✓ Top recommendation: ${topDoctor.name} with score ${topDoctor.score.toFixed(2)}`
+    `Top recommendation: ${topDoctor.name} with score ${topDoctor.score.toFixed(2)}`
   );
-  console.log(`✓ Correctly ranked based on ${topDoctor.visits} visits with ${topDoctor.avgRating.toFixed(1)}⭐ rating\n`);
+  console.log(`Correctly ranked based on ${topDoctor.visits} visits with ${topDoctor.avgRating.toFixed(1)} rating\n`);
 
   return result;
 }
@@ -110,7 +110,7 @@ export function testGetTopRecommendations() {
   });
 
   console.log(
-    `\n✓ Successfully retrieved top recommendations with proper formatting\n`
+    `\nSuccessfully retrieved top recommendations with proper formatting\n`
   );
 
   return topDoctors;
@@ -143,7 +143,7 @@ export function testScoringAlgorithm() {
     }
   });
 
-  console.log("✓ Scoring algorithm correctly weighs frequency (60%) and rating (40%)\n");
+  console.log("Scoring algorithm correctly weighs frequency (60%) and rating (40%)\n");
 }
 
 /**
@@ -159,7 +159,7 @@ export function testFormatting() {
     console.log(`${doctor.name}: "${formatted}"`);
   });
 
-  console.log("\n✓ Formatting displays visit count and ratings correctly\n");
+  console.log("\nFormatting displays visit count and ratings correctly\n");
 }
 
 /**
@@ -177,7 +177,7 @@ export function runAllTests() {
   testFormatting();
 
   console.log("═══════════════════════════════════════════════════════════════════");
-  console.log("All tests completed successfully! ✓");
+  console.log("All tests completed successfully!");
   console.log("═══════════════════════════════════════════════════════════════════\n");
 }
 

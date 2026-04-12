@@ -39,7 +39,7 @@ export default function DoctorPatientPfp({ doctor, onLogout }) {
   return (
     <div className="min-h-screen flex bg-[#f2f2f2] font-hammersmith">
       {/* sidebar */}
-      <aside className="w-64 bg-hf-sidebar p-6 flex flex-col shadow-[0_20px_20px_rgba(0,0,0,0.30)]">
+      <aside className="w-64 bg-hf-sidebar p-6 flex flex-col" style={{boxShadow: "0 1px 3px rgba(15, 23, 42, 0.08)"}}>
         <div className="flex justify-center mb-6">
           <img src="/hf-logo.png" className="h-[40px]" />
         </div>
@@ -50,8 +50,7 @@ export default function DoctorPatientPfp({ doctor, onLogout }) {
         </div>
         <nav className="flex flex-col gap-2">
               <NavItem icon={<LayoutDashboard size={18} />} text="Dashboard" onClick={() => navigate("/doctor/dashboard")} />
-          <NavItem icon={<CalendarCheck size={18} />} text="Appointments" onClick={() => navigate("/doctor/appointments")} />
-          <NavItem icon={<Video size={18} />} text="Video Conference" onClick={() => navigate("/doctor/vc")} />
+          <NavItem icon={<Video size={18} />} text="Online Consultations" onClick={() => navigate("/doctor/vc")} />
           <NavItem icon={<Users size={18} />} text="Patient Profile" active />
           <NavItem icon={<Clock size={18} />} text="My Schedule" onClick={() => navigate("/doctor/schedule")} />
           <NavItem icon={<LogOut size={18} />} text="Logout" onClick={handleLogout} />
@@ -89,7 +88,7 @@ function NavItem({ icon, text, to, onClick, active }) {
   return (
     <button
       onClick={handleClick}
-      className="flex items-center gap-3 px-4 py-2 rounded-lg text-sm text-black hover:bg-hf-blue hover:text-white transition"
+      className="flex items-center gap-3 px-4 py-2 text-sm text-black hover:bg-hf-blue hover:text-white transition"
     >
       {icon}
       <span>{text}</span>

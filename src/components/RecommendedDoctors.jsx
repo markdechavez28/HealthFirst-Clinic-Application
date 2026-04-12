@@ -50,7 +50,7 @@ export function RecommendedDoctors({
 
   // Full view for dashboard
   return (
-    <div className="mt-6 rounded-2xl bg-white shadow-soft overflow-hidden">
+    <div className="mt-6 bg-white overflow-hidden" style={{boxShadow: "0 1px 3px rgba(15, 23, 42, 0.08)"}}>
       <div className="bg-hf-blue text-white px-5 py-3 flex items-center gap-2">
         <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-white/15">
           <Icon name="star" className="w-5 h-5" />

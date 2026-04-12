@@ -18,7 +18,20 @@ export function ChooseTime({ onNext, onBack, selectedDate, setSelectedDate, sele
     return dates;
   };
 
+  // Generate time slots in 30-minute intervals (9:00am - 5:00pm)
+  const generate30MinuteSlots = () => {
+    const slots = [];
+    for (let hours = 9; hours < 17; hours++) {
+      for (let minutes = 0; minutes < 60; minutes += 30) {
+        const timeStr = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+        slots.push(timeStr);
+      }
+    }
+    return slots;
+  };
+
   const availableDates = generateDates();
+  const availableSlots = generate30MinuteSlots();
 
   const formatDateLabel = (date) => {
     const dayName = date.toLocaleDateString("en-US", { weekday: "short" });
@@ -82,41 +95,39 @@ export function ChooseTime({ onNext, onBack, selectedDate, setSelectedDate, sele
           <div className="mb-4">
             {!selectedDate ? (
               <div className="p-4 rounded-lg bg-yellow-50 border border-yellow-200">
-                <p className="text-sm font-semibold text-yellow-900">📅 Select a date first</p>
+                <p className="text-sm font-semibold text-yellow-900">Select a date first</p>
               </div>
             ) : (
               <div className="p-4 rounded-lg bg-blue-50 border border-blue-200">
-                <p className="text-sm font-semibold text-blue-900">✓ Date selected: {formatDateLabel(availableDates.find(d => formatDateValue(d) === selectedDate))}</p>
+                <p className="text-sm font-semibold text-blue-900">Date selected: {formatDateLabel(availableDates.find(d => formatDateValue(d) === selectedDate))}</p>
               </div>
             )}
           </div>
 
           <div className="text-sm font-semibold text-slate-600 mb-3">
-            Preferred time
+            Available Time Slots (30-minute intervals)
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
-            <label className="flex flex-col gap-2">
-              <span className="text-xs font-semibold text-slate-500">Pick a time</span>
-              <input
-                type="time"
-                value={timeInput}
-                onChange={(e) => {
-                  setTimeInput(e.target.value);
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 mb-4">
+            {availableSlots.map((slot) => (
+              <button
+                key={slot}
+                onClick={() => {
+                  setTimeInput(slot);
                   if (selectedDate) {
-                    setSelectedTime(e.target.value);
+                    setSelectedTime(slot);
                   }
                 }}
                 disabled={!selectedDate}
-                className="w-full rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:ring-2 focus:ring-hf-blue/30"
-              />
-            </label>
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <div className="text-xs text-slate-500">Selected time</div>
-              <div className="mt-2 text-lg font-bold text-slate-900">
-                {selectedTime ? selectedTime : "No time selected"}
-              </div>
-            </div>
+                className={`px-3 py-2 rounded-lg font-semibold text-sm transition ${
+                  selectedTime === slot
+                    ? 'bg-hf-blue text-white border border-hf-blue'
+                    : 'bg-white border border-slate-200 text-slate-700 hover:border-hf-blue hover:bg-blue-50'
+                } ${!selectedDate ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+              >
+                {slot}
+              </button>
+            ))}
           </div>
 
           {selectedDate && !selectedTime && (

@@ -4,7 +4,7 @@ import HealthFirstLogo from "./HealthFirstLogo.jsx";
 export default function AuthLayout({ children, rightTagline = "Your Health, first.\nAnywhere." }) {
   return (
     <div className="min-h-screen w-full bg-slate-200 flex items-center justify-center p-4">
-      <div className="w-full max-w-6xl overflow-hidden rounded-2xl shadow-soft bg-white">
+      <div className="w-full max-w-6xl overflow-hidden bg-white" style={{boxShadow: "0 1px 3px rgba(15, 23, 42, 0.08)"}}>
         <div className="grid grid-cols-1 lg:grid-cols-2">
           {/* Left: Card panel */ }
           <div className="relative">

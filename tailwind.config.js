@@ -26,14 +26,15 @@ export default {
         navblue: "#e7f1f7"
       },
       boxShadow: {
-        soft: "0 12px 24px rgba(15, 23, 42, 0.14)",
-        card: "0 10px 20px rgba(15, 23, 42, 0.18)"
+        soft: "0 1px 3px rgba(15, 23, 42, 0.08)",
+        card: "0 2px 8px rgba(15, 23, 42, 0.06)"
       },
       borderRadius: {
         xl2: "1.25rem"
       },
       fontFamily: {
-        hammersmith: ['Hammersmith One', 'sans-serif']
+        hammersmith: ['Inter', 'system-ui', 'sans-serif'],
+        formal: ['Lato', 'system-ui', 'sans-serif']
       }
     },
   },

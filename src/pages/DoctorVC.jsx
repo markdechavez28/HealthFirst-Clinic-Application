@@ -7,14 +7,15 @@ import {
   LogOut,
   ChevronDown,
   ChevronUp,
-  Search,
   Play,
   Check
 } from "lucide-react"
 import { useNavigate } from "react-router-dom"
 import { useEffect, useState } from "react"
-import { getAppointmentsByDoctor, updateAppointmentStatus } from "../services/doctorService"
+import { getAppointmentsByDoctor, updateAppointmentStatus, checkAndUpdateExpiredAppointments, cancelAppointmentForDoctor } from "../services/doctorService"
+import { supabaseDoctor as supabase } from "../utils/supabaseClient"
 import { JitsiMeeting } from "@jitsi/react-sdk"
+import { MeetingEndDialog } from "../components/MeetingEndDialog"
 
 export default function DoctorVC({ doctor, onLogout }) {
   const navigate = useNavigate()
@@ -22,21 +23,34 @@ export default function DoctorVC({ doctor, onLogout }) {
   // Dropdown states
   const [showNew, setShowNew] = useState(true)
   const [showOngoing, setShowOngoing] = useState(true)
+  const [showIncomplete, setShowIncomplete] = useState(false)
   const [showConcluded, setShowConcluded] = useState(false)
 
   const [conferences, setConferences] = useState([])
-  const [searchTerm, setSearchTerm] = useState("")
 
   const [roomName, setRoomName] = useState("")
   const [showMeeting, setShowMeeting] = useState(false)
   const [activeConference, setActiveConference] = useState(null)
+  const [showEndDialog, setShowEndDialog] = useState(false)
+  const [cancellationLogs, setCancellationLogs] = useState([])
 
   useEffect(() => {
     const load = async () => {
       if (!doctor?.doctorID) return
       try {
+        // Check and update expired appointments first
+        await checkAndUpdateExpiredAppointments(doctor.doctorID)
+        
         const appts = await getAppointmentsByDoctor(doctor.doctorID)
         setConferences(appts || [])
+
+        // Load cancellation logs for this doctor
+        const { data: logs, error } = await supabase
+          .from("CancellationLog")
+          .select("*")
+          .eq("doctorID", doctor.doctorID)
+          .order("cancelledAt", { ascending: false })
+        if (!error) setCancellationLogs(logs || [])
       } catch (e) {
         console.error(e)
       }
@@ -79,19 +93,42 @@ export default function DoctorVC({ doctor, onLogout }) {
     }
   }
 
-  const markComplete = async (appointmentID) => {
-    try {
-      await updateAppointmentStatus(appointmentID, "completed")
+  const handleEndConsultation = () => {
+    setShowEndDialog(true)
+  }
 
-      setConferences((prev) =>
-        prev.map((c) =>
-          c.appointmentID === appointmentID
-            ? { ...c, status: "completed" }
-            : c
-        )
-      )
+  const handleStatusChanged = (newStatus) => {
+    setShowEndDialog(false)
+    setShowMeeting(false)
+    // Reload appointments
+    const load = async () => {
+      if (!doctor?.doctorID) return
+      try {
+        const appts = await getAppointmentsByDoctor(doctor.doctorID)
+        setConferences(appts || [])
+      } catch (e) {
+        console.error(e)
+      }
+    }
+    load()
+  }
+
+  // Handle canceling an appointment
+  const handleCancelAppointment = async (appointmentID, appointment) => {
+    const confirmMessage = `Patient will receive a 100% refund after canceling this appointment.\n\nAre you sure you want to cancel?`
+    
+    if (!confirm(confirmMessage)) return
+    
+    try {
+      await cancelAppointmentForDoctor(appointmentID, appointment)
+      // Reload appointments
+      if (!doctor?.doctorID) return
+      const appts = await getAppointmentsByDoctor(doctor.doctorID)
+      setConferences(appts || [])
+      alert("Appointment cancelled successfully!\nPatient will receive a 100% refund within 3-5 business days.")
     } catch (e) {
-      console.error(e)
+      console.error("Error canceling appointment:", e)
+      alert(`Failed to cancel appointment.\n\nError: ${e.message || "Unknown error occurred"}`)
     }
   }
 
@@ -108,15 +145,22 @@ export default function DoctorVC({ doctor, onLogout }) {
           </div>
 
           <button
-            onClick={() => {
-              markComplete(activeConference.appointmentID)
-              setShowMeeting(false)
-            }}
-            className="px-6 py-2 bg-red-600 rounded-xl"
+            onClick={handleEndConsultation}
+            className="px-6 py-2 bg-red-600 rounded-xl hover:bg-red-700"
           >
             End Consultation
           </button>
         </div>
+
+        {showEndDialog && activeConference && (
+          <MeetingEndDialog
+            appointment={activeConference}
+            doctor={doctor}
+            onClose={() => setShowEndDialog(false)}
+            onStatusChanged={handleStatusChanged}
+            navigate={navigate}
+          />
+        )}
 
         <JitsiMeeting
           domain="meet.jit.si"
@@ -140,16 +184,23 @@ export default function DoctorVC({ doctor, onLogout }) {
   }
 
   // FILTERS
+  const now = new Date()
+  
+  // Helper function to check if appointment is in the future
+  const isFutureAppointment = (c) => {
+    const [hour, minute] = (c.time_slot || "00:00").split(":").map(Number)
+    const apptDateTime = new Date(c.appointment_date)
+    apptDateTime.setHours(hour, minute, 0)
+    return apptDateTime >= now
+  }
+
   const ongoing = conferences.filter((c) => c.status === "ongoing")
-  const upcoming = conferences.filter((c) => c.status === "upcoming")
+  const upcoming = conferences.filter((c) => c.status === "upcoming" && isFutureAppointment(c))
+  const unattendedByPatient = conferences.filter((c) => c.status === "unattended_by_patient")
+  const unattendedByDoctor = conferences.filter((c) => c.status === "unattended_by_doctor")
   const completed = conferences.filter((c) => c.status === "completed")
 
-  const filterBySearch = (list) =>
-    list.filter((c) =>
-      (c.Patient?.name || "")
-        .toLowerCase()
-        .includes(searchTerm.toLowerCase())
-    )
+  const filterBySearch = (list) => list
 
   return (
     <div className="min-h-screen flex bg-[#f2f2f2] font-hammersmith">
@@ -172,8 +223,7 @@ export default function DoctorVC({ doctor, onLogout }) {
 
         <nav className="flex flex-col gap-2">
           <NavItem icon={<LayoutDashboard size={18} />} text="Dashboard" onClick={() => navigate("/doctor/dashboard")} />
-          <NavItem icon={<CalendarCheck size={18} />} text="Appointments" onClick={() => navigate("/doctor/appointments")} />
-          <NavItem icon={<Video size={18} />} text="Video Conference" active />
+          <NavItem icon={<Video size={18} />} text="Online Consultations" active />
           <NavItem icon={<Users size={18} />} text="Patient Profile" onClick={() => navigate("/doctor/patients")} />
           <NavItem icon={<Clock size={18} />} text="My Schedule" onClick={() => navigate("/doctor/schedule")} />
           <NavItem icon={<LogOut size={18} />} text="Logout" onClick={handleLogout} />
@@ -184,16 +234,8 @@ export default function DoctorVC({ doctor, onLogout }) {
       <main className="flex-1 p-6">
 
         {/* Top */}
-        <div className="flex justify-between items-center bg-white rounded-xl px-6 py-3 mb-6 shadow">
-          <h2 className="text-2xl text-hf-blue">Video Conference</h2>
-
-          <input
-            type="text"
-            placeholder="Search"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="border rounded-full px-4 py-2 w-64"
-          />
+        <div className="flex justify-between items-center bg-white px-6 py-3 mb-6" style={{boxShadow: "0 1px 3px rgba(15, 23, 42, 0.08)"}}>
+          <h2 className="text-2xl text-hf-blue">Online Consultations</h2>
         </div>
 
         {/* Ongoing */}
@@ -209,6 +251,7 @@ export default function DoctorVC({ doctor, onLogout }) {
               color="green"
               button="Rejoin"
               onClick={() => handleJoinConference(c)}
+              onCancel={handleCancelAppointment}
             />
           )}
         />
@@ -225,17 +268,62 @@ export default function DoctorVC({ doctor, onLogout }) {
               c={c}
               button="Start Conference"
               onClick={() => handleJoinConference(c)}
+              onCancel={handleCancelAppointment}
             />
+          )}
+        />
+
+        {/* Unattended by Patient */}
+        <Section
+          title="Patient No-Show (Unattended by Patient)"
+          open={showIncomplete}
+          toggle={() => setShowIncomplete(!showIncomplete)}
+          data={filterBySearch(unattendedByPatient)}
+          empty="No patient no-shows recorded"
+          render={(c) => (
+            <div className="flex justify-between border-b pb-2">
+              <div>
+                <p className="font-semibold">{c.Patient?.name}</p>
+                <p className="text-sm text-gray-500">
+                  {c.appointment_date} · {c.time_slot}
+                </p>
+              </div>
+              <span className="text-orange-600 flex items-center gap-1">
+                <Check size={16}/> Patient No-Show
+              </span>
+            </div>
+          )}
+        />
+
+        {/* Unattended by Doctor */}
+        <Section
+          title="Unattended by Doctor (No Confirmation)"
+          open={showConcluded}
+          toggle={() => setShowConcluded(!showConcluded)}
+          data={filterBySearch(unattendedByDoctor)}
+          empty="No unconfirmed past conferences"
+          render={(c) => (
+            <div className="flex justify-between border-b pb-2">
+              <div>
+                <p className="font-semibold">{c.Patient?.name}</p>
+                <p className="text-sm text-gray-500">
+                  {c.appointment_date} · {c.time_slot}
+                </p>
+              </div>
+              <span className="text-red-600 flex items-center gap-1">
+                <Check size={16}/> Unconfirmed
+              </span>
+            </div>
           )}
         />
 
         {/* Completed */}
         <Section
-          title="Concluded Conferences"
+          title="Completed Conferences"
           open={showConcluded}
           toggle={() => setShowConcluded(!showConcluded)}
           data={filterBySearch(completed)}
-          empty="No concluded conferences"
+          empty="No completed conferences"
           render={(c) => (
             <div className="flex justify-between border-b pb-2">
               <div>
@@ -259,7 +347,7 @@ export default function DoctorVC({ doctor, onLogout }) {
 /* Section */
 function Section({ title, open, toggle, data, empty, render }) {
   return (
-    <div className="bg-white rounded-xl shadow mb-6">
+    <div className="bg-white mb-6" style={{boxShadow: "0 1px 3px rgba(15, 23, 42, 0.08)"}}>
       <button onClick={toggle} className="w-full flex justify-between px-6 py-4 font-semibold bg-gray-100">
         {title}
         {open ? <ChevronUp size={18}/> : <ChevronDown size={18}/>}
@@ -277,9 +365,9 @@ function Section({ title, open, toggle, data, empty, render }) {
 }
 
 /* Card */
-function Card({ c, button, onClick, color }) {
+function Card({ c, button, onClick, color, onCancel }) {
   return (
-    <div className={`flex justify-between items-center p-4 rounded-lg ${color === "green" ? "bg-green-50 border-2 border-green-500" : "bg-hf-panel"}`}>
+    <div className={`flex justify-between items-center p-4 ${color === "green" ? "bg-green-50 border-2 border-green-500" : "bg-hf-panel"}`}>
       <div>
         <p className="font-semibold">{c.Patient?.name}</p>
         <p className="text-sm text-gray-500">
@@ -287,12 +375,20 @@ function Card({ c, button, onClick, color }) {
         </p>
       </div>
 
-      <button
-        onClick={onClick}
-        className={`px-5 py-2 rounded-lg text-white ${color === "green" ? "bg-green-600" : "bg-hf-blue"}`}
-      >
-        {button}
-      </button>
+      <div className="flex gap-3">
+        <button
+          onClick={onClick}
+          className={`px-5 py-2 text-white ${color === "green" ? "bg-green-600" : "bg-hf-blue"}`}
+        >
+          {button}
+        </button>
+        <button
+          onClick={() => onCancel(c.appointmentID, c)}
+          className="px-5 py-2 rounded-lg text-white bg-red-500 hover:bg-red-600"
+        >
+          Cancel
+        </button>
+      </div>
     </div>
   )
 }

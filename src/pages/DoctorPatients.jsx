@@ -14,7 +14,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { getDoctorPatientProfiles, updatePrescriptionUrl } from "../services/doctorService";
-import { supabase } from "../utils/supabaseClient";
+import { supabaseDoctor as supabase } from "../utils/supabaseClient";
 
 export default function DoctorPatients({ doctor, onLogout }) {
   const navigate = useNavigate();
@@ -238,7 +238,7 @@ const handleUpload = async () => {
   return (
     <div className="min-h-screen flex bg-[#f2f2f2] font-hammersmith">
       {/* SIDEBAR */}
-      <aside className="w-64 bg-hf-sidebar p-6 flex flex-col shadow-[0_20px_20px_rgba(0,0,0,0.30)]">
+      <aside className="w-64 bg-hf-sidebar p-6 flex flex-col" style={{boxShadow: "0 1px 3px rgba(15, 23, 42, 0.08)"}}>
         <div className="flex justify-center mb-6">
           <img src="/hf-logo.png" className="h-[40px]" />
         </div>
@@ -251,8 +251,7 @@ const handleUpload = async () => {
 
         <nav className="flex flex-col gap-2">
           <NavItem icon={<LayoutDashboard size={18} />} text="Dashboard" to="/doctor/dashboard" />
-          <NavItem icon={<CalendarCheck size={18} />} text="Appointments" to="/doctor/appointments" />
-          <NavItem icon={<Video size={18} />} text="Video Conference" to="/doctor/vc" />
+          <NavItem icon={<Video size={18} />} text="Online Consultations" to="/doctor/vc" />
           <NavItem icon={<Users size={18} />} text="Patient Profile" to="/doctor/patients" />
           <NavItem icon={<Clock size={18} />} text="My Schedule" to="/doctor/schedule" />
           <NavItem icon={<LogOut size={18} />} text="Logout" onClick={handleLogout} />
@@ -261,7 +260,7 @@ const handleUpload = async () => {
 
       {/* MAIN */}
       <main className="flex-1 p-6">
-        <div className="flex justify-between items-center bg-white rounded-xl px-6 py-3 mb-6 shadow">
+        <div className="flex justify-between items-center bg-white px-6 py-3 mb-6" style={{boxShadow: "0 1px 3px rgba(15, 23, 42, 0.08)"}}>
           <h2 className="text-2xl text-txtblue">Patient Profile</h2>
           <div className="flex justify-end items-center gap-2 relative">
           <div className="relative w-64">
@@ -313,7 +312,7 @@ const handleUpload = async () => {
             </div>
           ) : (
             filteredPatients.map((p) => (
-              <div key={p.id} className="bg-[#a1c6ea] rounded-xl p-4 shadow relative">
+              <div key={p.id} className="bg-[#a1c6ea] p-4 relative" style={{boxShadow: "0 1px 3px rgba(15, 23, 42, 0.08)"}}>
                 {/* Profile placeholder */}
                 <div className="absolute top-6 right-7 w-20 h-20 rounded-full border-2 border-lightgreen bg-white flex items-center justify-center text-gray-400 font-bold">
                   {p.name.charAt(0)}
@@ -423,7 +422,7 @@ function NavItem({ icon, text, to, onClick }) {
   return (
     <button
       onClick={handleClick}
-      className="flex items-center gap-3 px-4 py-2 rounded-lg text-sm text-black hover:bg-hf-blue hover:text-white transition"
+      className="flex items-center gap-3 px-4 py-2 text-sm text-black hover:bg-hf-blue hover:text-white transition"
     >
       {icon}
       <span>{text}</span>
@@ -434,7 +433,7 @@ function NavItem({ icon, text, to, onClick }) {
 function Modal({ title, children, onClose }) {
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-      <div className="bg-white p-5 rounded-xl w-[300px] relative">
+      <div className="bg-white p-5 w-[300px] relative" style={{boxShadow: "0 1px 3px rgba(15, 23, 42, 0.08)"}}>
         <button onClick={onClose} className="absolute top-2 right-2"><X/></button>
         <h3 className="mb-3 font-semibold">{title}</h3>
         {children}

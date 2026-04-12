@@ -81,6 +81,14 @@ export function Icon({ name, className = "" }) {
           <path d="M7 17a5 5 0 0 1 0-7l3-3a5 5 0 0 1 7 7l-3 3a5 5 0 0 1-7 0Z" />
         </svg>
       );
+    case "lock":
+      return (
+        <svg viewBox="0 0 24 24" {...common}>
+          <path d="M12 1C7 1 3 5 3 10v2a3 3 0 0 0-3 3v7a3 3 0 0 0 3 3h18a3 3 0 0 0 3-3v-7a3 3 0 0 0-3-3v-2c0-5-4-9-9-9Z" />
+          <path d="M7 13a3 3 0 0 1 3-3h4a3 3 0 0 1 3 3" />
+          <path d="M12 17v4" />
+        </svg>
+      );
     default:
       return null;
   }

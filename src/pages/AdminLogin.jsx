@@ -58,7 +58,7 @@ const AdminLogin = ({ onLogin }) => {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-hf-blue focus:outline-none focus:ring-2 focus:ring-blue-200"
             />
           </div>
 
@@ -74,7 +74,7 @@ const AdminLogin = ({ onLogin }) => {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-hf-blue focus:outline-none focus:ring-2 focus:ring-blue-200"
             />
           </div>
 
@@ -87,7 +87,7 @@ const AdminLogin = ({ onLogin }) => {
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-md bg-emerald-700 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full rounded-md bg-hf-blue px-3 py-2 text-sm font-semibold text-white hover:bg-bgdarkblue disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? "Signing in..." : "Continue"}
           </button>
