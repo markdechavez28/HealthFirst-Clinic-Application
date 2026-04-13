@@ -73,9 +73,9 @@ export function NotificationProvider({ children }) {
     }
   }, []);
 
-  const addNotification = useCallback((message, type = "info", duration = 5000) => {
+  const addNotification = useCallback((message, type = "info", duration = 5000, options = {}) => {
     const id = Date.now();
-    const notification = { id, message, type };
+    const notification = { id, message, type, ...options };
 
     console.log("Adding notification:", notification);
     setNotifications((prev) => [...prev, notification]);

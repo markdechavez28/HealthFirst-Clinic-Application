@@ -1,9 +1,12 @@
 import React, { useState, useEffect } from "react";
 import { NavLink } from "react-router-dom";
 import { supabase, supabaseDoctor } from "../utils/supabaseClient";
+import { useNotification } from "../hooks/useNotification";
 import { Plus, Edit2, Trash2, Search, Loader, X, AlertCircle } from "lucide-react";
 
 const ManageUser = ({ admin, onLogout }) => {
+  const { addNotification } = useNotification();
+
   // Doctor management state
   const [doctors, setDoctors] = useState([]);
   const [filteredDoctors, setFilteredDoctors] = useState([]);
@@ -177,8 +180,29 @@ const ManageUser = ({ admin, onLogout }) => {
 
         // Prevent the admin browser from retaining a doctor auth session.
         await supabaseDoctor.auth.signOut();
-        
-        alert(`Doctor created successfully!\nTemporary Password: ${tempPassword}\n\nIf email confirmation is enabled in Supabase, the doctor must verify their email before logging in.`);
+
+        addNotification(
+          `Doctor created successfully. Temporary password: ${tempPassword}`,
+          "success",
+          0,
+          {
+            actionLabel: "Copy Password",
+            onAction: async () => {
+              try {
+                await navigator.clipboard.writeText(tempPassword);
+                addNotification("Temporary password copied to clipboard.", "success", 3000);
+              } catch (clipboardError) {
+                console.error("Failed to copy password:", clipboardError);
+                addNotification("Could not copy the password automatically. Please copy it manually from the notification.", "error", 5000);
+              }
+            },
+          }
+        );
+        addNotification(
+          "If email confirmation is enabled in Supabase, the doctor must verify their email before logging in.",
+          "info",
+          8000
+        );
         loadDoctors();
       } else {
         // Update doctor profile
@@ -194,7 +218,7 @@ const ManageUser = ({ admin, onLogout }) => {
         
         if (updateError) throw updateError;
         
-        alert("Doctor updated successfully!");
+        addNotification("Doctor updated successfully!", "success", 4000);
         loadDoctors();
       }
       
