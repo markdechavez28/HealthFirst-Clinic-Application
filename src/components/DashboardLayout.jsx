@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import HealthFirstLogo from "./HealthFirstLogo.jsx";
+import HomeLogoLink from "./HomeLogoLink.jsx";
 import { Icon } from "./Icon.jsx";
 import ChangePasswordDialog from "./ChangePasswordDialog.jsx";
 import { updatePatientPassword } from "../services/patientService.js";
@@ -49,7 +49,9 @@ export default function DashboardLayout({ patient, active, onLogout, children })
           <div className="grid grid-cols-12">
             <aside className="col-span-12 md:col-span-4 lg:col-span-3 bg-hf-sidebar border-r border-slate-200">
               <div className="p-6">
-                <HealthFirstLogo />
+                <div className="flex justify-center">
+                  <HomeLogoLink className="justify-center" />
+                </div>
                 <div className="mt-6 text-center">
                   <div className="h-24 w-24 mx-auto rounded-full bg-sky-100 flex items-center justify-center text-2xl font-bold text-hf-blue">
                     {patient?.name?.[0] || "P"}

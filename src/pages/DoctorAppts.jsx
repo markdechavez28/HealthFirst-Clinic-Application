@@ -14,6 +14,7 @@ import { useState, useEffect } from "react";
 import { getAppointmentsByDoctor } from "../services/doctorService";
 import { supabaseDoctor as supabase } from "../utils/supabaseClient";
 import { useNotification } from "../hooks/useNotification";
+import DoctorSidebarHomeLink from "../components/DoctorSidebarHomeLink.jsx";
 
 export default function DoctorAppts({ doctor, onLogout }) {
   const navigate = useNavigate();
@@ -150,9 +151,7 @@ export default function DoctorAppts({ doctor, onLogout }) {
     <div className="min-h-screen flex bg-[#f2f2f2] font-hammersmith">
       {/* SIDEBAR */}
       <aside className="w-64 bg-hf-sidebar p-6 flex flex-col" style={{boxShadow: "0 1px 3px rgba(15, 23, 42, 0.08)"}}>
-        <div className="flex justify-center gap-2 mb-6 ">
-          <img src="/hf-logo.png" className="h-[40px] w-auto" />
-        </div>
+        <DoctorSidebarHomeLink />
 
         <div className="flex flex-col items-center mb-8">
           <img src="/doctor.jpg" alt="Doctor" className="w-20 h-20 rounded-full border-2 border-lightgreen" />

@@ -12,6 +12,7 @@ import { useEffect, useState } from "react"
 import { getAppointmentsByDoctor, updateDoctorPassword } from "../services/doctorService"
 import { supabaseDoctor as supabase } from "../utils/supabaseClient"
 import ChangePasswordDialog from "../components/ChangePasswordDialog"
+import DoctorSidebarHomeLink from "../components/DoctorSidebarHomeLink.jsx"
 
 export default function DoctorDashboard({ doctor, onLogout }) {
   const navigate = useNavigate();
@@ -132,9 +133,7 @@ export default function DoctorDashboard({ doctor, onLogout }) {
 
       {/* SIDEBAR */}
       <aside className="w-64 bg-hf-sidebar p-6 flex flex-col" style={{boxShadow: "0 1px 3px rgba(15, 23, 42, 0.08)"}}>
-        <div className="flex justify-center gap-2 mb-6 ">
-            <img src="/hf-logo.png" className="h-[40px] w-auto" />
-        </div>
+        <DoctorSidebarHomeLink />
 
         <div className="flex flex-col items-center mb-8">
           <img src="/doctor.jpg" alt="Doctor" className="w-20 h-20 rounded-full border-2 border-lightgreen" />

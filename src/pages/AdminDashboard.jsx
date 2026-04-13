@@ -1,5 +1,6 @@
 import React from "react";
 import { NavLink, useNavigate } from "react-router-dom";
+import HomeLogoLink from "../components/HomeLogoLink.jsx";
 
 const quickActions = [
   {
@@ -35,6 +36,9 @@ const AdminDashboard = ({ onLogout }) => {
     <main className="min-h-screen bg-white px-5 py-10 text-slate-800">
       <div className="mx-auto grid w-full max-w-6xl grid-cols-1 gap-6 lg:grid-cols-[240px_1fr]">
         <aside className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <div className="mb-4 flex justify-center border-b border-slate-200 pb-4">
+            <HomeLogoLink className="justify-center" />
+          </div>
           <p className="text-xs font-semibold uppercase tracking-wide text-hf-blue">Admin Panel</p>
           <nav className="mt-4 space-y-2">
             <NavLink

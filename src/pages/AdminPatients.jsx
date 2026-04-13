@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { NavLink } from "react-router-dom";
 import { userService } from "../utils/supabaseClient";
 import { Loader, Search, ArrowUpDown } from "lucide-react";
-import HealthFirstLogo from "../components/HealthFirstLogo.jsx";
+import HomeLogoLink from "../components/HomeLogoLink.jsx";
 
 const AdminPatients = ({ onLogout }) => {
   const [patients, setPatients] = useState([]);
@@ -64,6 +64,9 @@ const AdminPatients = ({ onLogout }) => {
       <div className="mx-auto grid w-full max-w-6xl grid-cols-1 gap-6 lg:grid-cols-[240px_1fr]">
         {/* Sidebar Navigation */}
         <aside className="rounded-lg border border-slate-200 bg-slate-50 p-4" style={{boxShadow: "0 1px 3px rgba(15, 23, 42, 0.08)"}}>
+          <div className="mb-4 flex justify-center border-b border-slate-200 pb-4">
+            <HomeLogoLink className="justify-center" />
+          </div>
           <p className="text-xs font-semibold uppercase tracking-wide text-hf-blue">Admin Panel</p>
           <nav className="mt-4 space-y-2">
             <NavLink
@@ -129,11 +132,6 @@ const AdminPatients = ({ onLogout }) => {
 
         {/* Main Content */}
         <div className="space-y-6">
-          {/* Logo */}
-          <div className="flex justify-center">
-            <HealthFirstLogo />
-          </div>
-
           {/* Header */}
           <header>
             <h1 className="text-3xl font-extrabold text-slate-900">Patient Information</h1>

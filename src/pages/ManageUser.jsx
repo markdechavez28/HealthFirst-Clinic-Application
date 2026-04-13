@@ -3,6 +3,7 @@ import { NavLink } from "react-router-dom";
 import { supabase, supabaseDoctor } from "../utils/supabaseClient";
 import { useNotification } from "../hooks/useNotification";
 import { Plus, Edit2, Trash2, Search, Loader, X, AlertCircle } from "lucide-react";
+import HomeLogoLink from "../components/HomeLogoLink.jsx";
 
 const ManageUser = ({ admin, onLogout }) => {
   const { addNotification } = useNotification();
@@ -236,6 +237,9 @@ const ManageUser = ({ admin, onLogout }) => {
       <div className="mx-auto grid w-full max-w-6xl grid-cols-1 gap-6 lg:grid-cols-[240px_1fr]">
         {/* Sidebar */}
         <aside className="rounded-lg border border-slate-200 bg-slate-50 p-4" style={{boxShadow: "0 1px 3px rgba(15, 23, 42, 0.08)"}}>
+          <div className="mb-4 flex justify-center border-b border-slate-200 pb-4">
+            <HomeLogoLink className="justify-center" />
+          </div>
           <p className="text-xs font-semibold uppercase tracking-wide text-hf-blue">Admin Panel</p>
           <nav className="mt-4 space-y-2">
             <NavLink

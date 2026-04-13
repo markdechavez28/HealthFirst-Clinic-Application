@@ -1,6 +1,10 @@
 import React, { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import AuthLayout from "../components/AuthLayout.jsx";
+import {
+  isAllowedPatientSignupEmail,
+  patientSignupEmailErrorMessage,
+} from "../utils/patientEmailDomains.js";
 
 function validatePassword(pw) {
   const rules = [
@@ -70,6 +74,9 @@ export default function RegisterPage({ onRegister, onGoLogin }) {
     if (!firstName.trim()) return setError("Please enter your first name.");
     if (!surname.trim()) return setError("Please enter your surname.");
     if (!email.trim()) return setError("Please enter your email.");
+    if (!isAllowedPatientSignupEmail(email)) {
+      return setError(patientSignupEmailErrorMessage());
+    }
     if (!contactNumber.trim()) return setError("Please enter your contact number.");
     if (!validateContactNumber(contactNumber)) {
       return setError("Contact number must be in format +63 xxx xxx xxxx (Philippines).");
@@ -145,9 +152,13 @@ export default function RegisterPage({ onRegister, onGoLogin }) {
           onChange={(e) => setEmail(e.target.value)}
           className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-hf-blue/40 focus:border-hf-blue"
           type="email"
-          placeholder="you@email.com"
+          placeholder="you@gmail.com"
+          autoComplete="email"
           required
         />
+        <p className="mt-1 text-xs text-slate-500">
+          Use a recognized provider such as @gmail.com, @yahoo.com, @outlook.com, or @icloud.com.
+        </p>
 
         <label className="mt-4 block text-xs font-semibold text-slate-700">Contact Number</label>
         <input
