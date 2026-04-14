@@ -299,9 +299,9 @@ export async function approveSchedule(submittedScheduleID, adminID) {
   const shifts = submitted.scheduleData?.shifts || submitted.scheduleData || [];
   const requestType = submitted.scheduleData?.type || 'Application';
 
-  // Handle CancelShift requests - mark appointments as unattended_by_doctor
+  // Handle CancelShift requests - mark appointments as cancelled_by_doctor
   if (requestType === 'CancelShift') {
-    // For each shift being cancelled, find and mark all matching appointments as unattended_by_doctor
+    // For each shift being cancelled, find and mark all matching appointments as cancelled_by_doctor
     for (const shift of shifts) {
       const shiftDate = shift.date;
       const startTime = shift.clockIn || shift.time;
@@ -313,10 +313,12 @@ export async function approveSchedule(submittedScheduleID, adminID) {
       const [startHour, startMin] = startTime.split(':').map(Number);
       const [endHour, endMin] = endTime ? endTime.split(':').map(Number) : [startHour + 1, startMin];
       
+      console.log(`[SHIFT CANCEL] Processing shift cancellation for doctor ${submitted.doctorID} on ${shiftDate} from ${startTime} to ${endTime}`);
+      
       // Find all appointments for this doctor on this date
       const { data: appointments, error: apptError } = await supabase
         .from("Appointment")
-        .select("appointmentID, time_slot")
+        .select("appointmentID, time_slot, status")
         .eq("doctorID", submitted.doctorID)
         .eq("appointment_date", shiftDate);
       
@@ -326,23 +328,43 @@ export async function approveSchedule(submittedScheduleID, adminID) {
       }
       
       // Filter appointments that fall within the cancelled shift time
+      // BUT exclude already-completed or cancelled appointments
       const appointmentsToUpdate = appointments.filter(appt => {
+        // Skip if already completed, cancelled, or marked as unattended
+        if (['completed', 'cancelled_by_patient', 'cancelled_by_doctor', 'unattended_by_patient', 'unattended_by_doctor'].includes(appt.status)) {
+          return false;
+        }
+        
         const [apptHour, apptMin] = (appt.time_slot || "00:00").split(':').map(Number);
-        return apptHour > startHour || 
-               (apptHour === startHour && apptMin >= startMin) &&
+        // Check if appointment is within the shift time range
+        const isWithinRange = (apptHour > startHour || 
+               (apptHour === startHour && apptMin >= startMin)) &&
                (apptHour < endHour || (apptHour === endHour && apptMin < endMin));
+        return isWithinRange;
       });
       
-      // Mark these appointments as unattended_by_doctor
+      console.log(`[SHIFT CANCEL] Found ${appointmentsToUpdate.length} appointments to cancel within this shift`, {
+        shiftDate,
+        shiftTime: `${startTime}-${endTime}`,
+        appointments: appointmentsToUpdate.map(a => ({ id: a.appointmentID, slot: a.time_slot, status: a.status }))
+      });
+      
+      // Mark these appointments as cancelled_by_doctor
       if (appointmentsToUpdate.length > 0) {
         const appointmentIDs = appointmentsToUpdate.map(a => a.appointmentID);
         const { error: updateApptError } = await supabase
           .from("Appointment")
-          .update({ status: "unattended_by_doctor" })
+          .update({ status: "cancelled_by_doctor" })
           .in("appointmentID", appointmentIDs);
         
         if (updateApptError) {
           console.error("Error updating appointments for shift cancellation:", updateApptError);
+        } else {
+          console.log(`[SHIFT CANCEL SUCCESS] Marked ${appointmentIDs.length} appointments as cancelled_by_doctor`, {
+            appointmentIDs,
+            shiftDate,
+            shiftTime: `${startTime}-${endTime}`
+          });
         }
       }
     }
