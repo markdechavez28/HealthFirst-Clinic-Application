@@ -57,8 +57,32 @@ function calculateAge(birthDate) {
   return age;
 }
 
+function getDateConstraints() {
+  const today = new Date();
+  
+  // Max date: today (no future dates)
+  const maxDate = new Date(today);
+  
+  // Min date: 140 years ago (oldest person allowed)
+  const minDate = new Date(today.getFullYear() - 140, today.getMonth(), today.getDate());
+  
+  // Format dates for the date input (YYYY-MM-DD)
+  const formatDateForInput = (date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+  
+  return {
+    minDate: formatDateForInput(minDate),
+    maxDate: formatDateForInput(maxDate)
+  };
+}
+
 export default function RegisterPage({ onRegister, onGoLogin }) {
   const navigate = useNavigate();
+  const dateConstraints = getDateConstraints();
   const [firstName, setFirstName] = useState("");
   const [middleName, setMiddleName] = useState("");
   const [surname, setSurname] = useState("");
@@ -96,6 +120,19 @@ export default function RegisterPage({ onRegister, onGoLogin }) {
       return setError("Contact number must be in format +63 xxx xxx xxxx (Philippines).");
     }
     if (!birthday.trim()) return setError("Please enter your birthday.");
+    
+    // Validate birthday constraints
+    const birthDate = new Date(birthday);
+    const today = new Date();
+    const maxDate = new Date(today.getFullYear() - 140, today.getMonth(), today.getDate());
+    
+    if (birthDate > today) {
+      return setError("Birthday cannot be in the future.");
+    }
+    if (birthDate < maxDate) {
+      return setError("Age cannot exceed 140 years.");
+    }
+    
     if (!sex.trim()) return setError("Please select your sex.");
     if (!allRulesOk) return setError("Password does not meet the requirements.");
     if (password !== confirm) return setError("Passwords do not match.");
@@ -197,6 +234,8 @@ export default function RegisterPage({ onRegister, onGoLogin }) {
           onChange={(e) => setBirthday(e.target.value)}
           className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-hf-blue/40 focus:border-hf-blue"
           type="date"
+          min={dateConstraints.minDate}
+          max={dateConstraints.maxDate}
           required
         />
         {birthday && (

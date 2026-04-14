@@ -152,6 +152,11 @@ export function VideoConferencePage({ patient }) {
             disableDeepLinking: true,
             subject: `Consultation with Dr. ${activeAppointment?.Doctor?.name || "Doctor"}`,
           }}
+          interfaceConfigOverwrite={{
+            TOOLBAR_BUTTONS: ['microphone', 'camera', 'closedcaptions', 'chat', 'raisehand', 'participants-pane', 'tileview', 'fullscreen'],
+            HIDE_INVITE_BUTTON: true,
+            HIDE_SETTINGS_BUTTON: true,
+          }}
           userInfo={{
             displayName: patient?.name || "Patient",
           }}

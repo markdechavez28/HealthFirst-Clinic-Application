@@ -293,6 +293,10 @@ export default function DoctorVC({ doctor, onLogout }) {
             ],
             subject: `Consultation with ${activeConference?.Patient?.name || "Patient"}`,
           }}
+          interfaceConfigOverwrite={{
+            HIDE_INVITE_BUTTON: true,
+            HIDE_SETTINGS_BUTTON: true,
+          }}
           userInfo={{
             displayName: doctor?.name || "Doctor",
           }}
