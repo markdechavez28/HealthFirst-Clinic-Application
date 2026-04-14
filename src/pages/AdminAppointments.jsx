@@ -7,7 +7,6 @@ import { getStatusMeta, normalizeStatus } from "../utils/statusConstants";
 
 const AdminAppointments = ({ onLogout }) => {
   const [appointments, setAppointments] = useState([]);
-  const [cancellationLogs, setCancellationLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [cancellationLoading, setCancellationLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -43,27 +42,8 @@ const AdminAppointments = ({ onLogout }) => {
       }
     };
 
-    const fetchCancellationLogs = async () => {
-      setCancellationLoading(true);
-      try {
-        const { data, error: err } = await supabase
-          .from("CancellationLog")
-          .select("*")
-          .order("cancelledAt", { ascending: false })
-          .limit(50);
-        
-        if (err) throw err;
-        setCancellationLogs(data || []);
-      } catch (error) {
-        console.error("Error loading cancellation logs:", error);
-        // Silently fail if table doesn't exist
-      } finally {
-        setCancellationLoading(false);
-      }
-    };
-
     fetchAppointments();
-    fetchCancellationLogs();
+    
   }, []);
 
   const VALID_STATUS_VALUES = [
@@ -227,7 +207,7 @@ const AdminAppointments = ({ onLogout }) => {
         <div className="space-y-6">
           <header className="space-y-2">
             <h1 className="text-3xl font-extrabold text-slate-900">Appointment Information</h1>
-            <p className="text-sm text-slate-600">Monitor and manage all appointments and cancellations</p>
+            <p className="text-sm text-slate-600">Monitor and manage all appointments</p>
           </header>
 
           {loading ? (
@@ -338,68 +318,6 @@ const AdminAppointments = ({ onLogout }) => {
                     </table>
                   )}
                 </div>
-              </section>
-
-              {/* Cancellation Logs Section */}
-              <section className="rounded-lg border border-slate-200 bg-white p-6 mt-6">
-                <h2 className="mb-6 text-xl font-bold text-slate-900">Cancellation Logs</h2>
-                
-                {cancellationLoading ? (
-                  <div className="flex items-center justify-center py-8">
-                    <Loader />
-                    <span className="ml-2 text-slate-600">Loading cancellation logs...</span>
-                  </div>
-                ) : cancellationLogs.length === 0 ? (
-                  <div className="py-8 text-center text-slate-500">
-                    No cancellation logs found
-                  </div>
-                ) : (
-                  <div className="max-h-[600px] overflow-x-auto">
-                    <table className="w-full text-left text-sm">
-                      <thead>
-                        <tr className="border-b border-slate-200">
-                          <th className="px-4 py-3 font-semibold text-slate-700">Cancelled By</th>
-                          <th className="px-4 py-3 font-semibold text-slate-700">Patient</th>
-                          <th className="px-4 py-3 font-semibold text-slate-700">Doctor</th>
-                          <th className="px-4 py-3 font-semibold text-slate-700">Appointment</th>
-                          <th className="px-4 py-3 font-semibold text-slate-700">Refund %</th>
-                          <th className="px-4 py-3 font-semibold text-slate-700">Cancelled At</th>
-                          <th className="px-4 py-3 font-semibold text-slate-700">Reason</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {cancellationLogs.map((log, idx) => (
-                          <tr key={idx} className="border-b border-slate-100 hover:bg-slate-50">
-                            <td className="px-4 py-3">
-                              <p className="capitalize font-semibold text-slate-900">{log.cancelledBy || "—"}</p>
-                            </td>
-                            <td className="px-4 py-3">
-                              <p className="font-semibold text-slate-900">{log.patientName || log.patientID || "—"}</p>
-                            </td>
-                            <td className="px-4 py-3">
-                              <p className="font-semibold text-slate-900">Dr. {log.doctorName || "—"}</p>
-                            </td>
-                            <td className="px-4 py-3">
-                              <p className="font-medium text-slate-700">{log.appointmentDate || "—"}</p>
-                              <p className="text-xs text-slate-500">{log.appointmentTime || "—"}</p>
-                            </td>
-                            <td className="px-4 py-3">
-                              <p className="font-semibold text-slate-900">{log.refundPercentage || "—"}%</p>
-                            </td>
-                            <td className="px-4 py-3">
-                              <p className="text-sm text-slate-600">
-                                {log.cancelledAt ? new Date(log.cancelledAt).toLocaleString() : "—"}
-                              </p>
-                            </td>
-                            <td className="px-4 py-3">
-                              <p className="text-slate-700">{log.reason || "—"}</p>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
               </section>
             </>
           )}

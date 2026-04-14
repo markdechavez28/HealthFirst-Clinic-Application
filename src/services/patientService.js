@@ -302,48 +302,11 @@ export async function cancelAppointment(appointmentID, appointmentDetails = null
       throw error;
     }
 
-    // Log the cancellation for admin
-    try {
-      await logCancellation({
-        appointmentID,
-        patientID: appointmentDetails.patientID,
-        doctorID: appointmentDetails.doctorID,
-        cancelledBy: "patient",
-        cancelledAt: new Date().toISOString(),
-        appointmentDate: appointmentDetails.appointment_date,
-        timeSlot: appointmentDetails.time_slot,
-        reason: "Patient requested cancellation",
-        refundPercentage: 20,
-      });
-    } catch (e) {
-      console.error("Error logging cancellation:", e);
-      // Don't throw - cancellation already succeeded, just log failed
-    }
-
     console.log("[CANCEL SUCCESS] Appointment cancelled by patient. appointmentID:", appointmentID);
     return { appointmentID, status: "cancelled", cancelled_by: "patient" };
   } catch (error) {
     console.error("[CANCEL FAIL] Exception during cancellation:", error);
     throw error;
-  }
-}
-
-// Log cancellations for admin review
-export async function logCancellation(cancellationData) {
-  try {
-    const { data, error } = await supabase
-      .from("CancellationLog")
-      .insert([cancellationData]);
-    
-    if (error) {
-      console.error("Failed to log cancellation:", error);
-      // Table might not exist, continue anyway
-      return null;
-    }
-    return data;
-  } catch (e) {
-    console.error("Exception logging cancellation:", e);
-    return null;
   }
 }
 
