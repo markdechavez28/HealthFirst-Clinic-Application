@@ -150,7 +150,7 @@ function PatientRoutes() {
     return { ok: true };
   };
 
-  const onRegister = async ({ fullName, email, contactNumber, password }) => {
+  const onRegister = async ({ fullName, email, contactNumber, age, sex, password }) => {
     if (!isAllowedPatientSignupEmail(email)) {
       return { ok: false, message: patientSignupEmailErrorMessage() };
     }
@@ -163,6 +163,8 @@ function PatientRoutes() {
         name: fullName,
         email,
         contact_num: contactNumber,
+        age,
+        sex,
       });
       if (err2) return { ok: false, message: err2.message };
       // Create mock appointment history to seed recommendations

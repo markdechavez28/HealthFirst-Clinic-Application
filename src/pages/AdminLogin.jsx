@@ -43,20 +43,37 @@ const AdminLogin = ({ onLogin }) => {
     }
   };
 
-  const handlePasswordReset = (e) => {
+  const handlePasswordReset = async (e) => {
     e.preventDefault();
-    if (!resetEmail.trim()) {
-      alert("Please enter your email address");
-      return;
+    setLoading(true);
+    try {
+      if (!resetEmail.trim()) {
+        setError("Please enter your email address");
+        setLoading(false);
+        return;
+      }
+      // Check if admin with this email exists
+      const admin = await getAdminByEmail(resetEmail);
+      if (!admin) {
+        setError("The account is not registered");
+        setLoading(false);
+        return;
+      }
+      console.log(`[FORGOT PASSWORD] Sending reset email to ${resetEmail}`);
+      setResetSent(true);
+      // Auto-reset after 4 seconds
+      setTimeout(() => {
+        setResetSent(false);
+        setResetEmail("");
+        setShowResetModal(false);
+        setError("");
+      }, 4000);
+    } catch (err) {
+      console.error("Password reset error:", err);
+      setError("The account is not registered");
+    } finally {
+      setLoading(false);
     }
-    console.log(`[FORGOT PASSWORD] Sending reset email to ${resetEmail}`);
-    setResetSent(true);
-    // Auto-reset after 4 seconds
-    setTimeout(() => {
-      setResetSent(false);
-      setResetEmail("");
-      setShowResetModal(false);
-    }, 4000);
   };
 
   return (
@@ -146,20 +163,31 @@ const AdminLogin = ({ onLogin }) => {
                     placeholder="Enter your email"
                     className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-hf-blue/40 focus:border-hf-blue mb-4"
                     required
+                    disabled={loading}
                   />
+                  {error && (
+                    <div className="rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700 mb-4">
+                      {error}
+                    </div>
+                  )}
                   <div className="flex gap-2">
                     <button
                       type="button"
-                      onClick={() => setShowResetModal(false)}
-                      className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold hover:bg-slate-50"
+                      onClick={() => {
+                        setShowResetModal(false);
+                        setError("");
+                      }}
+                      className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                      disabled={loading}
                     >
                       Cancel
                     </button>
                     <button
                       type="submit"
-                      className="flex-1 rounded-lg bg-hf-blue px-3 py-2 text-sm font-semibold text-white hover:bg-bgdarkblue"
+                      disabled={loading}
+                      className="flex-1 rounded-lg bg-hf-blue px-3 py-2 text-sm font-semibold text-white hover:bg-bgdarkblue disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      Send Reset Link
+                      {loading ? "Checking..." : "Send Reset Link"}
                     </button>
                   </div>
                 </form>

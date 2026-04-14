@@ -1,8 +1,64 @@
 import React from "react";
+import { getPatientAppointmentsForDate } from "../services/patientService.js";
 
-export function ChooseTime({ onNext, onBack, selectedDate, setSelectedDate, selectedTime, setSelectedTime }) {
+export function ChooseTime({ onNext, onBack, selectedDate, setSelectedDate, selectedTime, setSelectedTime, patientID }) {
   
   const [timeInput, setTimeInput] = React.useState(selectedTime || "09:00");
+  const [bookedSlots, setBookedSlots] = React.useState([]);
+  const [loadingBookedSlots, setLoadingBookedSlots] = React.useState(false);
+
+  // Convert "Today"/"Tomorrow" labels to YYYY-MM-DD format for database queries
+  const normalizeDate = (dateStr) => {
+    const today = new Date();
+    
+    if (dateStr === "Today") {
+      const y = today.getFullYear();
+      const m = String(today.getMonth() + 1).padStart(2, "0");
+      const d = String(today.getDate()).padStart(2, "0");
+      return `${y}-${m}-${d}`;
+    }
+    
+    if (dateStr === "Tomorrow") {
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const y = tomorrow.getFullYear();
+      const m = String(tomorrow.getMonth() + 1).padStart(2, "0");
+      const d = String(tomorrow.getDate()).padStart(2, "0");
+      return `${y}-${m}-${d}`;
+    }
+    
+    // Already in YYYY-MM-DD format
+    return dateStr;
+  };
+
+  // Fetch booked time slots when date changes
+  React.useEffect(() => {
+    if (selectedDate && patientID) {
+      setLoadingBookedSlots(true);
+      const fetchBookedSlots = async () => {
+        try {
+          // Normalize date format for database query
+          const normalizedDate = normalizeDate(selectedDate);
+          console.log(`[CHOOSE TIME] ⏳ Fetching booked slots. Input: "${selectedDate}", Normalized: "${normalizedDate}", PatientID: "${patientID}"`);
+          
+          const slots = await getPatientAppointmentsForDate(patientID, normalizedDate);
+          console.log(`[CHOOSE TIME] ✅ Fetched booked slots:`, slots);
+          console.log(`[CHOOSE TIME] ✅ Booked slots array:`, slots, `Length: ${slots.length}`);
+          console.log(`[CHOOSE TIME] ✅ Booked slots JSON:`, JSON.stringify(slots));
+          setBookedSlots(slots);
+          setLoadingBookedSlots(false);
+        } catch (error) {
+          console.error(`[CHOOSE TIME] ❌ Error fetching booked slots:`, error);
+          setLoadingBookedSlots(false);
+        }
+      };
+      fetchBookedSlots();
+    } else {
+      console.log(`[CHOOSE TIME] No date or patientID selected. selectedDate=${selectedDate}, patientID=${patientID}`);
+      setBookedSlots([]);
+      setLoadingBookedSlots(false);
+    }
+  }, [selectedDate, patientID]);
 
   // Generate available dates (next 14 days)
   const generateDates = () => {
@@ -31,22 +87,27 @@ export function ChooseTime({ onNext, onBack, selectedDate, setSelectedDate, sele
   };
 
   // Check if a time slot has already passed
-  const isTimeSlotPassed = (date, time) => {
+  const isTimeSlotPassed = (dateStr, time) => {
     const today = new Date();
-    const selectedDateObj = new Date(date);
+    today.setHours(0, 0, 0, 0); // Midnight for clean comparison
+    
+    // Parse YYYY-MM-DD format string into local date (not UTC)
+    const [year, month, day] = dateStr.split('-').map(Number);
+    const selectedDateObj = new Date(year, month - 1, day);
+    selectedDateObj.setHours(0, 0, 0, 0);
     
     // If date is before today, all times are passed
-    if (selectedDateObj.toDateString() < today.toDateString()) {
+    if (selectedDateObj < today) {
       return true;
     }
     
     // If date is today, check if time has passed
     if (selectedDateObj.toDateString() === today.toDateString()) {
       const [hours, minutes] = time.split(':').map(Number);
-      const slotTime = new Date(today);
+      const slotTime = new Date();
       slotTime.setHours(hours, minutes, 0, 0);
       
-      return slotTime <= today;
+      return slotTime <= new Date();
     }
     
     // Future dates, time hasn't passed
@@ -120,9 +181,13 @@ export function ChooseTime({ onNext, onBack, selectedDate, setSelectedDate, sele
               <div className="p-4 rounded-lg bg-yellow-50 border border-yellow-200">
                 <p className="text-sm font-semibold text-yellow-900">Select a date first</p>
               </div>
+            ) : loadingBookedSlots ? (
+              <div className="p-4 rounded-lg bg-blue-50 border border-blue-200">
+                <p className="text-sm font-semibold text-blue-900">⏳ Checking your booked appointments...</p>
+              </div>
             ) : (
               <div className="p-4 rounded-lg bg-blue-50 border border-blue-200">
-                <p className="text-sm font-semibold text-blue-900">Date selected: {formatDateLabel(availableDates.find(d => formatDateValue(d) === selectedDate))}</p>
+                <p className="text-sm font-semibold text-blue-900">Date selected: {formatDateLabel(availableDates.find(d => formatDateValue(d) === selectedDate))} {bookedSlots.length > 0 && `(${bookedSlots.length} booked)`}</p>
               </div>
             )}
           </div>
@@ -133,27 +198,54 @@ export function ChooseTime({ onNext, onBack, selectedDate, setSelectedDate, sele
 
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 mb-4">
             {availableSlots.map((slot) => {
-              const isDisabled = !selectedDate || isTimeSlotPassed(selectedDate, slot);
+              const isDisabled = !selectedDate || isTimeSlotPassed(selectedDate, slot) || bookedSlots.includes(slot);
+              const isBooked = bookedSlots.includes(slot);
+              
+              // Log each slot's state for debugging
+              React.useMemo(() => {
+                if (selectedDate) {
+                  const isInBooked = bookedSlots.includes(slot);
+                  console.log(`[SLOT] ${slot}: isDisabled=${isDisabled}, isBooked=${isBooked}, isPassed=${isTimeSlotPassed(selectedDate, slot)}, inBookedArray=${isInBooked}`);
+                  if (isBooked && !isInBooked) {
+                    console.warn(`[SLOT WARNING] ${slot} marked as booked but NOT in bookedSlots array!`, { slot, bookedSlots });
+                  }
+                }
+              }, [slot, isDisabled, isBooked, bookedSlots]);
+              
+              const handleSlotClick = (e) => {
+                // Prevent all interaction if disabled
+                if (isDisabled) {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  return false;
+                }
+                
+                setTimeInput(slot);
+                if (selectedDate) {
+                  setSelectedTime(slot);
+                }
+              };
               
               return (
                 <button
                   key={slot}
-                  onClick={() => {
-                    if (!isDisabled) {
-                      setTimeInput(slot);
-                      if (selectedDate) {
-                        setSelectedTime(slot);
-                      }
-                    }
-                  }}
+                  onClick={handleSlotClick}
+                  onMouseDown={(e) => isDisabled && (e.preventDefault(), e.stopPropagation())}
+                  onTouchStart={(e) => isDisabled && (e.preventDefault(), e.stopPropagation())}
                   disabled={isDisabled}
-                  title={isDisabled && selectedDate && isTimeSlotPassed(selectedDate, slot) ? "This time has already passed" : ""}
+                  aria-disabled={isDisabled}
+                  title={
+                    isBooked 
+                      ? "You already have an appointment at this time" 
+                      : (isDisabled && selectedDate && isTimeSlotPassed(selectedDate, slot) ? "This time has already passed" : "")
+                  }
+                  style={isDisabled ? { pointerEvents: 'none', cursor: 'not-allowed' } : { cursor: 'pointer' }}
                   className={`px-3 py-2 rounded-lg font-semibold text-sm transition ${
                     selectedTime === slot && !isDisabled
                       ? 'bg-hf-blue text-white border border-hf-blue'
                       : isDisabled
-                      ? 'bg-gray-100 border border-gray-200 text-gray-400 cursor-not-allowed opacity-50'
-                      : 'bg-white border border-slate-200 text-slate-700 hover:border-hf-blue hover:bg-blue-50 cursor-pointer'
+                      ? 'bg-gray-100 border border-gray-200 text-gray-400 opacity-50'
+                      : 'bg-white border border-slate-200 text-slate-700 hover:border-hf-blue hover:bg-blue-50'
                   }`}
                 >
                   {slot}
@@ -161,6 +253,14 @@ export function ChooseTime({ onNext, onBack, selectedDate, setSelectedDate, sele
               );
             })}
           </div>
+
+          {selectedDate && bookedSlots.length > 0 && !loadingBookedSlots && (
+            <div className="mt-3 p-3 rounded-lg bg-red-50 border border-red-200">
+              <p className="text-xs font-semibold text-red-900">
+                ❌ Already booked on this date: <span className="ml-1 font-mono">{bookedSlots.join(", ")}</span>
+              </p>
+            </div>
+          )}
 
           {selectedDate && !selectedTime && (
             <div className="mt-4 p-3 rounded-lg bg-amber-50 border border-amber-200">

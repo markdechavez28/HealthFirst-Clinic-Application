@@ -45,6 +45,18 @@ function formatContactNumber(input) {
   }
 }
 
+function calculateAge(birthDate) {
+  if (!birthDate) return null;
+  const today = new Date();
+  const birth = new Date(birthDate);
+  let age = today.getFullYear() - birth.getFullYear();
+  const monthDifference = today.getMonth() - birth.getMonth();
+  if (monthDifference < 0 || (monthDifference === 0 && today.getDate() < birth.getDate())) {
+    age--;
+  }
+  return age;
+}
+
 export default function RegisterPage({ onRegister, onGoLogin }) {
   const navigate = useNavigate();
   const [firstName, setFirstName] = useState("");
@@ -52,6 +64,8 @@ export default function RegisterPage({ onRegister, onGoLogin }) {
   const [surname, setSurname] = useState("");
   const [email, setEmail] = useState("");
   const [contactNumber, setContactNumber] = useState("+63 ");
+  const [birthday, setBirthday] = useState("");
+  const [sex, setSex] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState("");
@@ -81,6 +95,8 @@ export default function RegisterPage({ onRegister, onGoLogin }) {
     if (!validateContactNumber(contactNumber)) {
       return setError("Contact number must be in format +63 xxx xxx xxxx (Philippines).");
     }
+    if (!birthday.trim()) return setError("Please enter your birthday.");
+    if (!sex.trim()) return setError("Please select your sex.");
     if (!allRulesOk) return setError("Password does not meet the requirements.");
     if (password !== confirm) return setError("Passwords do not match.");
 
@@ -89,8 +105,10 @@ export default function RegisterPage({ onRegister, onGoLogin }) {
     const fullName = [firstName, middleName, surname].filter(n => n.trim()).join(" ");
     // Remove spaces for database storage
     const cleanContactNumber = contactNumber.replace(/\s/g, "");
+    // Calculate age from birthday
+    const age = calculateAge(birthday);
 
-    const res = await onRegister({ fullName, email, contactNumber: cleanContactNumber, password });
+    const res = await onRegister({ fullName, email, contactNumber: cleanContactNumber, age, sex, password });
     setLoading(false);
     if (!res?.ok) {
       setError(res?.message || "Registration failed.");
@@ -102,6 +120,8 @@ export default function RegisterPage({ onRegister, onGoLogin }) {
       setSurname("");
       setEmail("");
       setContactNumber("+63 ");
+      setBirthday("");
+      setSex("");
       setPassword("");
       setConfirm("");
       // Redirect to login after 2 seconds
@@ -170,6 +190,31 @@ export default function RegisterPage({ onRegister, onGoLogin }) {
           required
         />
         <p className="mt-1 text-xs text-slate-500">Format: +63 followed by 10-digit number</p>
+
+        <label className="mt-4 block text-xs font-semibold text-slate-700">Birthday</label>
+        <input
+          value={birthday}
+          onChange={(e) => setBirthday(e.target.value)}
+          className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-hf-blue/40 focus:border-hf-blue"
+          type="date"
+          required
+        />
+        {birthday && (
+          <p className="mt-1 text-xs text-slate-500">Age: {calculateAge(birthday)} years old</p>
+        )}
+
+        <label className="mt-4 block text-xs font-semibold text-slate-700">Sex</label>
+        <select
+          value={sex}
+          onChange={(e) => setSex(e.target.value)}
+          className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-hf-blue/40 focus:border-hf-blue"
+          required
+        >
+          <option value="">Select your sex...</option>
+          <option value="Male">Male</option>
+          <option value="Female">Female</option>
+          <option value="Undeclared">Undeclared</option>
+        </select>
 
         <label className="mt-4 block text-xs font-semibold text-slate-700">Password</label>
         <input

@@ -19,25 +19,64 @@ import { supabaseDoctor as supabase } from "../utils/supabaseClient"
 import { JitsiMeeting } from "@jitsi/react-sdk"
 import { MeetingEndDialog } from "../components/MeetingEndDialog"
 import DoctorSidebarHomeLink from "../components/DoctorSidebarHomeLink.jsx"
+import { getStatusMeta } from "../utils/statusConstants"
 
 export default function DoctorVC({ doctor, onLogout }) {
   const navigate = useNavigate()
 
-  // Dropdown states
-  const [showNew, setShowNew] = useState(true)
-  const [showOngoing, setShowOngoing] = useState(true)
-  const [showIncomplete, setShowIncomplete] = useState(false)
-  const [showConcluded, setShowConcluded] = useState(false)
+  // Dropdown states - independent toggle for each section
+  const [showOngoingConsultation, setShowOngoingConsultation] = useState(true)
+  const [showUpcoming, setShowUpcoming] = useState(true)
+  const [showCompleted, setShowCompleted] = useState(false)
+  const [showUnattendedByPatient, setShowUnattendedByPatient] = useState(false)
+  const [showUnattendedByDoctor, setShowUnattendedByDoctor] = useState(false)
+  const [showCancelledByDoctor, setShowCancelledByDoctor] = useState(false)
+  const [showCancelledByPatient, setShowCancelledByPatient] = useState(false)
+  const [sortOrder, setSortOrder] = useState("latest-first")
 
   const [conferences, setConferences] = useState([])
 
-  const [roomName, setRoomName] = useState("")
-  const [showMeeting, setShowMeeting] = useState(false)
-  const [activeConference, setActiveConference] = useState(null)
+  const [roomName, setRoomName] = useState(() => sessionStorage.getItem("hf_vc_room") || "")
+  const [showMeeting, setShowMeeting] = useState(() => sessionStorage.getItem("hf_vc_active") === "true")
+  const [activeConference, setActiveConference] = useState(() => {
+    try { return JSON.parse(sessionStorage.getItem("hf_vc_conf")) || null } catch { return null }
+  })
   const [showEndDialog, setShowEndDialog] = useState(false)
   const [cancellationLogs, setCancellationLogs] = useState([])
   const [showChangePasswordDialog, setShowChangePasswordDialog] = useState(false)
   const [changePasswordLoading, setChangePasswordLoading] = useState(false)
+
+  // Sort conferences based on sortOrder
+  const getSortedConferences = (items) => {
+    const sorted = [...items];
+    if (sortOrder === "earliest-first") {
+      sorted.sort((a, b) => {
+        const dateA = new Date(`${a.appointment_date} ${a.time_slot}`);
+        const dateB = new Date(`${b.appointment_date} ${b.time_slot}`);
+        return dateA - dateB;
+      });
+    } else {
+      sorted.sort((a, b) => {
+        const dateA = new Date(`${a.appointment_date} ${a.time_slot}`);
+        const dateB = new Date(`${b.appointment_date} ${b.time_slot}`);
+        return dateB - dateA;
+      });
+    }
+    return sorted;
+  };
+
+  // Sync active call state to sessionStorage whenever it changes
+  useEffect(() => {
+    if (showMeeting && roomName && activeConference) {
+      sessionStorage.setItem("hf_vc_active", "true")
+      sessionStorage.setItem("hf_vc_room", roomName)
+      sessionStorage.setItem("hf_vc_conf", JSON.stringify(activeConference))
+    } else if (!showMeeting) {
+      sessionStorage.removeItem("hf_vc_active")
+      sessionStorage.removeItem("hf_vc_room")
+      sessionStorage.removeItem("hf_vc_conf")
+    }
+  }, [showMeeting, roomName, activeConference])
 
   useEffect(() => {
     const load = async () => {
@@ -63,6 +102,20 @@ export default function DoctorVC({ doctor, onLogout }) {
     load()
   }, [doctor])
 
+  // Debug: Log all statuses once conferences load
+  useEffect(() => {
+    if (conferences.length > 0) {
+      const statusDistribution = conferences.reduce((acc, c) => {
+        const raw = c.status;
+        const normalized = normalizeStatus(c.status);
+        acc[`${raw} → ${normalized}`] = (acc[`${raw} → ${normalized}`] || 0) + 1;
+        return acc;
+      }, {});
+      console.log("[DOCTOR VC] Status Distribution (Raw → Normalized):", statusDistribution);
+      console.log("[DOCTOR VC] Total consultations:", conferences.length);
+    }
+  }, [conferences]);
+
   const handleLogout = () => {
     if (onLogout) onLogout()
     else {
@@ -70,6 +123,10 @@ export default function DoctorVC({ doctor, onLogout }) {
       navigate("/doctor/login")
     }
   }
+
+  // Normalize status values (handle case sensitivity and whitespace)
+  const normalizeStatus = (status) =>
+    (status || "").toLowerCase().trim();
 
   const handleChangePassword = async (currentPassword, newPassword) => {
     setChangePasswordLoading(true)
@@ -132,6 +189,31 @@ export default function DoctorVC({ doctor, onLogout }) {
     load()
   }
 
+  const handleLeaveTemporarily = async () => {
+    setShowEndDialog(false)
+    setShowMeeting(false)
+    
+    // If a doctor leaves without completing, revert the appointment back to "upcoming"
+    // so it stays in the upcoming category instead of ongoing
+    if (activeConference?.appointmentID) {
+      try {
+        console.log(`[DOCTOR VC] Doctor left meeting temporarily. Reverting appointment ${activeConference.appointmentID} back to "upcoming"`);
+        await updateAppointmentStatus(activeConference.appointmentID, "upcoming")
+        
+        // Update local state
+        setConferences((prev) =>
+          prev.map((c) =>
+            c.appointmentID === activeConference.appointmentID
+              ? { ...c, status: "upcoming" }
+              : c
+          )
+        )
+      } catch (e) {
+        console.error("Error reverting appointment status:", e)
+      }
+    }
+  }
+
   // Handle canceling an appointment
   const handleCancelAppointment = async (appointmentID, appointment) => {
     const confirmMessage = `Patient will receive a 100% refund after canceling this appointment.\n\nAre you sure you want to cancel?`
@@ -177,6 +259,7 @@ export default function DoctorVC({ doctor, onLogout }) {
             doctor={doctor}
             onClose={() => setShowEndDialog(false)}
             onStatusChanged={handleStatusChanged}
+            onLeaveTemporarily={handleLeaveTemporarily}
             navigate={navigate}
           />
         )}
@@ -189,9 +272,50 @@ export default function DoctorVC({ doctor, onLogout }) {
             startWithVideoMuted: false,
             prejoinPageEnabled: false,
             disableDeepLinking: true,
+            disableSettings: true,
+            disableProfile: true,
+            disableShortcuts: true,
+            toolbarButtons: [
+              'microphone',
+              'camera',
+              'closedcaptions',
+              'desktop',
+              'fullscreen',
+              'fodeviceselection',
+              'chat',
+              'raisehand',
+              'videoquality',
+              'filmstrip',
+              'feedback',
+              'stats',
+              'tileview',
+              'select-background',
+            ],
+            subject: `Consultation with ${activeConference?.Patient?.name || "Patient"}`,
           }}
           userInfo={{
             displayName: doctor?.name || "Doctor",
+          }}
+          onReadyToClose={async () => {
+            console.log("Doctor ended call from Jitsi, redirecting to Online Consultations");
+            
+            // If doctor closes Jitsi without completing through the dialog,
+            // revert the appointment status back to "upcoming"
+            if (activeConference?.appointmentID) {
+              try {
+                console.log(`[DOCTOR VC] Doctor closed Jitsi directly. Reverting appointment ${activeConference.appointmentID} back to "upcoming"`);
+                await updateAppointmentStatus(activeConference.appointmentID, "upcoming")
+              } catch (e) {
+                console.error("Error reverting appointment status:", e)
+              }
+            }
+            
+            setShowMeeting(false);
+            setShowEndDialog(false);
+            setTimeout(() => {
+              navigate("/doctor/vc");
+            }, 100);
+            return true;
           }}
           getIFrameRef={(ref) => {
             ref.style.height = "100%"
@@ -205,6 +329,18 @@ export default function DoctorVC({ doctor, onLogout }) {
   // FILTERS
   const now = new Date()
   
+  // Helper function to check if appointment is happening right now (within the 30-min slot)
+  const isAppointmentHappening = (c) => {
+    const [hour, minute] = (c.time_slot || "00:00").split(":").map(Number)
+    const apptDateTime = new Date(c.appointment_date)
+    apptDateTime.setHours(hour, minute, 0)
+    
+    const apptEndTime = new Date(apptDateTime)
+    apptEndTime.setMinutes(apptEndTime.getMinutes() + 30)
+    
+    return now >= apptDateTime && now < apptEndTime
+  }
+  
   // Helper function to check if appointment is in the future
   const isFutureAppointment = (c) => {
     const [hour, minute] = (c.time_slot || "00:00").split(":").map(Number)
@@ -213,11 +349,32 @@ export default function DoctorVC({ doctor, onLogout }) {
     return apptDateTime >= now
   }
 
-  const ongoing = conferences.filter((c) => c.status === "ongoing")
-  const upcoming = conferences.filter((c) => c.status === "upcoming" && isFutureAppointment(c))
-  const unattendedByPatient = conferences.filter((c) => c.status === "unattended_by_patient")
-  const unattendedByDoctor = conferences.filter((c) => c.status === "unattended_by_doctor")
-  const completed = conferences.filter((c) => c.status === "completed")
+  // Active statuses — appointments that haven't been conclusively ended by the doctor
+  const activeStatuses = ["upcoming", "ongoing"]
+
+  // Ongoing Consultation: ONLY if status is exactly "ongoing" AND scheduled right now (slot window)
+  // If doctor left without completing, status should have been reverted to "upcoming"
+  const ongoing = getSortedConferences(conferences.filter(
+    (c) => normalizeStatus(c.status) === "ongoing" && isAppointmentHappening(c)
+  ))
+
+  // Upcoming: slot is entirely in the future AND status is "upcoming"
+  const upcoming = getSortedConferences(conferences.filter(
+    (c) => normalizeStatus(c.status) === "upcoming" && isFutureAppointment(c)
+  ))
+
+  // Logged by doctor via the "Patient No-Show" button
+  const unattendedByPatient = getSortedConferences(conferences.filter((c) => normalizeStatus(c.status) === "unattended_by_patient"))
+
+  // No action taken by doctor (auto-expired)
+  const unattendedByDoctor = getSortedConferences(conferences.filter((c) => normalizeStatus(c.status) === "unattended_by_doctor"))
+
+  // Logged by doctor via the "Completed" button — always wins regardless of time
+  const completed = getSortedConferences(conferences.filter((c) => normalizeStatus(c.status) === "completed"))
+
+  // Cancelled appointments
+  const cancelledByPatient = getSortedConferences(conferences.filter((c) => normalizeStatus(c.status) === "cancelled_by_patient"))
+  const cancelledByDoctor = getSortedConferences(conferences.filter((c) => normalizeStatus(c.status) === "cancelled_by_doctor"))
 
   const filterBySearch = (list) => list
 
@@ -230,10 +387,10 @@ export default function DoctorVC({ doctor, onLogout }) {
 
         <div className="flex flex-col items-center mb-8">
           <img src="/doctor.jpg" className="w-20 h-20 rounded-full" />
-          <h2 className="text-xl mt-3 font-semibold">
+          <h2 className="text-xl mt-3 font-semibold text-center">
             Dr. {doctor?.name || "Unknown"}
           </h2>
-          <p className="text-sm text-hf-blue">
+          <p className="text-sm text-hf-blue text-center">
             {doctor?.specialty || ""}
           </p>
         </div>
@@ -252,15 +409,28 @@ export default function DoctorVC({ doctor, onLogout }) {
       <main className="flex-1 p-6">
 
         {/* Top */}
-        <div className="flex justify-between items-center bg-white px-6 py-3 mb-6" style={{boxShadow: "0 1px 3px rgba(15, 23, 42, 0.08)"}}>
-          <h2 className="text-2xl text-hf-blue">Online Consultations</h2>
+        <div className="bg-white px-6 py-3 mb-6" style={{boxShadow: "0 1px 3px rgba(15, 23, 42, 0.08)"}}>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <h2 className="text-2xl text-hf-blue">Online Consultations</h2>
+            <div className="flex items-center gap-3">
+              <label className="text-sm font-semibold text-slate-700">Sort by:</label>
+              <select
+                value={sortOrder}
+                onChange={(e) => setSortOrder(e.target.value)}
+                className="px-3 py-2 text-sm rounded-md border border-slate-300 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-400"
+              >
+                <option value="earliest-first">Earliest to Latest</option>
+                <option value="latest-first">Latest to Earliest</option>
+              </select>
+            </div>
+          </div>
         </div>
 
-        {/* Ongoing */}
+        {/* Ongoing Consultation */}
         <Section
-          title="Ongoing Conferences"
-          open={showOngoing}
-          toggle={() => setShowOngoing(!showOngoing)}
+          title="Ongoing Consultation"
+          open={showOngoingConsultation}
+          toggle={() => setShowOngoingConsultation(!showOngoingConsultation)}
           data={filterBySearch(ongoing)}
           empty="No ongoing conferences"
           render={(c) => (
@@ -274,13 +444,13 @@ export default function DoctorVC({ doctor, onLogout }) {
           )}
         />
 
-        {/* New */}
+        {/* Upcoming */}
         <Section
-          title="New Conferences"
-          open={showNew}
-          toggle={() => setShowNew(!showNew)}
+          title="Upcoming"
+          open={showUpcoming}
+          toggle={() => setShowUpcoming(!showUpcoming)}
           data={filterBySearch(upcoming)}
-          empty="No new conferences"
+          empty="No future conferences"
           render={(c) => (
             <Card
               c={c}
@@ -291,73 +461,140 @@ export default function DoctorVC({ doctor, onLogout }) {
           )}
         />
 
+        {/* Completed */}
+        <Section
+          title="Completed"
+          open={showCompleted}
+          toggle={() => setShowCompleted(!showCompleted)}
+          data={filterBySearch(completed)}
+          empty="No completed conferences"
+          render={(c) => {
+            const meta = getStatusMeta("completed");
+            return (
+              <div className="flex justify-between border-b pb-2">
+                <div>
+                  <p className="font-semibold">{c.Patient?.name}</p>
+                  <p className="text-sm text-gray-500">
+                    {c.appointment_date} · {c.time_slot ? c.time_slot.substring(0, 5) : ""}
+                  </p>
+                </div>
+                <span className={`text-xs font-semibold px-2 py-1 rounded ${meta.color}`}>
+                  {meta.label}
+                </span>
+              </div>
+            );
+          }}
+        />
+
         {/* Unattended by Patient */}
         <Section
-          title="Patient No-Show (Unattended by Patient)"
-          open={showIncomplete}
-          toggle={() => setShowIncomplete(!showIncomplete)}
+          title="Unattended by Patient"
+          open={showUnattendedByPatient}
+          toggle={() => setShowUnattendedByPatient(!showUnattendedByPatient)}
           data={filterBySearch(unattendedByPatient)}
-          empty="No patient no-shows recorded"
-          render={(c) => (
-            <div className="flex justify-between border-b pb-2">
-              <div>
-                <p className="font-semibold">{c.Patient?.name}</p>
-                <p className="text-sm text-gray-500">
-                  {c.appointment_date} · {c.time_slot}
-                </p>
+          empty="No unattended appointments"
+          render={(c) => {
+            const meta = getStatusMeta("unattended_by_patient");
+            return (
+              <div className="flex justify-between border-b pb-2">
+                <div>
+                  <p className="font-semibold">{c.Patient?.name}</p>
+                  <p className="text-sm text-gray-500">
+                    {c.appointment_date} · {c.time_slot ? c.time_slot.substring(0, 5) : ""}
+                  </p>
+                </div>
+                <span className={`text-xs font-semibold px-2 py-1 rounded ${meta.color}`}>
+                  {meta.label}
+                </span>
               </div>
-              <span className="text-orange-600 flex items-center gap-1">
-                <Check size={16}/> Patient No-Show
-              </span>
-            </div>
-          )}
+            );
+          }}
         />
 
         {/* Unattended by Doctor */}
         <Section
-          title="Unattended by Doctor (No Confirmation)"
-          open={showConcluded}
-          toggle={() => setShowConcluded(!showConcluded)}
+          title="Unattended by Doctor"
+          open={showUnattendedByDoctor}
+          toggle={() => setShowUnattendedByDoctor(!showUnattendedByDoctor)}
           data={filterBySearch(unattendedByDoctor)}
           empty="No unconfirmed past conferences"
-          render={(c) => (
-            <div className="flex justify-between border-b pb-2">
-              <div>
-                <p className="font-semibold">{c.Patient?.name}</p>
-                <p className="text-sm text-gray-500">
-                  {c.appointment_date} · {c.time_slot}
-                </p>
+          render={(c) => {
+            const meta = getStatusMeta("unattended_by_doctor");
+            return (
+              <div className="flex justify-between border-b pb-2">
+                <div>
+                  <p className="font-semibold">{c.Patient?.name}</p>
+                  <p className="text-sm text-gray-500">
+                    {c.appointment_date} · {c.time_slot ? c.time_slot.substring(0, 5) : ""}
+                  </p>
+                </div>
+                <span className={`text-xs font-semibold px-2 py-1 rounded ${meta.color}`}>
+                  {meta.label}
+                </span>
               </div>
-              <span className="text-red-600 flex items-center gap-1">
-                <Check size={16}/> Unconfirmed
-              </span>
-            </div>
-          )}
+            );
+          }}
         />
 
-        {/* Completed */}
+        {/* Cancelled by Doctor */}
         <Section
-          title="Completed Conferences"
-          open={showConcluded}
-          toggle={() => setShowConcluded(!showConcluded)}
-          data={filterBySearch(completed)}
-          empty="No completed conferences"
-          render={(c) => (
-            <div className="flex justify-between border-b pb-2">
-              <div>
-                <p className="font-semibold">{c.Patient?.name}</p>
-                <p className="text-sm text-gray-500">
-                  {c.appointment_date} · {c.time_slot}
-                </p>
+          title="Cancelled by Doctor"
+          open={showCancelledByDoctor}
+          toggle={() => setShowCancelledByDoctor(!showCancelledByDoctor)}
+          data={filterBySearch(cancelledByDoctor)}
+          empty="No appointments cancelled by doctor"
+          render={(c) => {
+            const meta = getStatusMeta("cancelled_by_doctor");
+            return (
+              <div className="flex justify-between border-b pb-2">
+                <div>
+                  <p className="font-semibold">{c.Patient?.name}</p>
+                  <p className="text-sm text-gray-500">
+                    {c.appointment_date} · {c.time_slot ? c.time_slot.substring(0, 5) : ""}
+                  </p>
+                </div>
+                <span className={`text-xs font-semibold px-2 py-1 rounded ${meta.color}`}>
+                  {meta.label}
+                </span>
               </div>
-              <span className="text-green-600 flex items-center gap-1">
-                <Check size={16}/> Completed
-              </span>
-            </div>
-          )}
+            );
+          }}
+        />
+
+        {/* Cancelled by Patient */}
+        <Section
+          title="Cancelled by Patient"
+          open={showCancelledByPatient}
+          toggle={() => setShowCancelledByPatient(!showCancelledByPatient)}
+          data={filterBySearch(cancelledByPatient)}
+          empty="No appointments cancelled by patients"
+          render={(c) => {
+            const meta = getStatusMeta("cancelled_by_patient");
+            return (
+              <div className="flex justify-between border-b pb-2">
+                <div>
+                  <p className="font-semibold">{c.Patient?.name}</p>
+                  <p className="text-sm text-gray-500">
+                    {c.appointment_date} · {c.time_slot ? c.time_slot.substring(0, 5) : ""}
+                  </p>
+                </div>
+                <span className={`text-xs font-semibold px-2 py-1 rounded ${meta.color}`}>
+                  {meta.label}
+                </span>
+              </div>
+            );
+          }}
         />
 
       </main>
+
+      {/* Change Password Dialog */}
+      <ChangePasswordDialog
+        isOpen={showChangePasswordDialog}
+        onClose={() => setShowChangePasswordDialog(false)}
+        onSubmit={handleChangePassword}
+        loading={changePasswordLoading}
+      />
     </div>
   )
 }
@@ -389,7 +626,7 @@ function Card({ c, button, onClick, color, onCancel }) {
       <div>
         <p className="font-semibold">{c.Patient?.name}</p>
         <p className="text-sm text-gray-500">
-          {c.appointment_date} · {c.time_slot}
+          {c.appointment_date} · {c.time_slot ? c.time_slot.substring(0, 5) : ""}
         </p>
       </div>
 

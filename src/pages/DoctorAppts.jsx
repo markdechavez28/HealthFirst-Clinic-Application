@@ -6,21 +6,25 @@ import {
   User,
   Clock,
   LogOut,
+  Lock,
   Search,
   FileText
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
-import { getAppointmentsByDoctor } from "../services/doctorService";
+import { getAppointmentsByDoctor, updateDoctorPassword } from "../services/doctorService";
 import { supabaseDoctor as supabase } from "../utils/supabaseClient";
 import { useNotification } from "../hooks/useNotification";
 import DoctorSidebarHomeLink from "../components/DoctorSidebarHomeLink.jsx";
+import ChangePasswordDialog from "../components/ChangePasswordDialog";
 
 export default function DoctorAppts({ doctor, onLogout }) {
   const navigate = useNavigate();
   const { addNotification } = useNotification();
   const [appointments, setAppointments] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
+  const [showChangePasswordDialog, setShowChangePasswordDialog] = useState(false);
+  const [changePasswordLoading, setChangePasswordLoading] = useState(false);
 
   // load appointments for logged-in doctor
   useEffect(() => {
@@ -126,6 +130,20 @@ export default function DoctorAppts({ doctor, onLogout }) {
     }
   };
 
+  const handleChangePassword = async (currentPassword, newPassword) => {
+    setChangePasswordLoading(true);
+    try {
+      await updateDoctorPassword(currentPassword, newPassword);
+      alert("Password changed successfully!");
+      setShowChangePasswordDialog(false);
+    } catch (error) {
+      console.error("Failed to change password:", error);
+      alert("Failed to change password: " + (error.message || "Unknown error"));
+    } finally {
+      setChangePasswordLoading(false);
+    }
+  };
+
   // Helper function to check if appointment is in the future (or present)
   const now = new Date();
   const isFutureOrPresent = (appt) => {
@@ -155,11 +173,8 @@ export default function DoctorAppts({ doctor, onLogout }) {
 
         <div className="flex flex-col items-center mb-8">
           <img src="/doctor.jpg" alt="Doctor" className="w-20 h-20 rounded-full border-2 border-lightgreen" />
-          <h2 className="text-xl mt-3 font-semibold">Dr. {doctor?.name || "Unknown"}</h2>
-          {doctor?.doctorID && (
-            <p className="text-xs text-gray-500 text-center">ID: {doctor.doctorID}</p>
-          )}
-          <p className="text-sm text-hf-blue">{doctor?.specialty || ""}</p>
+          <h2 className="text-xl mt-3 font-semibold text-center">Dr. {doctor?.name || "Unknown"}</h2>
+          <p className="text-sm text-hf-blue text-center">{doctor?.specialty || ""}</p>
         </div>
 
         <nav className="flex flex-col gap-2">
@@ -167,6 +182,7 @@ export default function DoctorAppts({ doctor, onLogout }) {
           <NavItem icon={<Video size={18} />} text="Online Consultations" to="/doctor/vc"/>
           <NavItem icon={<Users size={18} />} text="Patient Profile" to="/doctor/patients"/>
           <NavItem icon={<Clock size={18} />} text="My Schedule" to="/doctor/schedule"/>
+          <NavItem icon={<Lock size={18} />} text="Change Password" onClick={() => setShowChangePasswordDialog(true)}/>
           <NavItem icon={<LogOut size={18} />} text="Logout" onClick={handleLogout}/>
         </nav>
       </aside>
@@ -225,7 +241,13 @@ export default function DoctorAppts({ doctor, onLogout }) {
           />
         </div>
       </main>
-    </div>
+      {/* Change Password Dialog */}
+      <ChangePasswordDialog
+        isOpen={showChangePasswordDialog}
+        onClose={() => setShowChangePasswordDialog(false)}
+        onSubmit={handleChangePassword}
+        loading={changePasswordLoading}
+      />    </div>
   );
 }
 

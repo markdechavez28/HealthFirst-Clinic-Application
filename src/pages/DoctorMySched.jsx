@@ -9,12 +9,14 @@ import {
   LogOut,
   Lock,
   Plus,
-  Trash2
+  Trash2,
+  X
 } from "lucide-react";
-import { getScheduleByDoctor, submitScheduleForApproval, getSubmittedSchedulesByDoctor, withdrawSchedule, submitCancelShift } from "../services/doctorService";
+import { getScheduleByDoctor, submitScheduleForApproval, getSubmittedSchedulesByDoctor, withdrawSchedule, submitCancelShift, updateDoctorPassword } from "../services/doctorService";
 import { supabaseDoctor as supabase } from "../utils/supabaseClient";
 import { useNotification } from "../hooks/useNotification";
 import DoctorSidebarHomeLink from "../components/DoctorSidebarHomeLink.jsx";
+import ChangePasswordDialog from "../components/ChangePasswordDialog.jsx";
 
 // Get next 7 days including today
 function getNext7Days() {
@@ -90,11 +92,16 @@ export default function DoctorMySched({ doctor, onLogout }) {
   const navigate = useNavigate();
   const [schedule, setSchedule] = useState([]);
   const [submittedSchedules, setSubmittedSchedules] = useState([]);
+  const [appointments, setAppointments] = useState([]);
   const [loading, setLoading] = useState(false);
   const [selectedDate, setSelectedDate] = useState(null);
   const [currentShifts, setCurrentShifts] = useState([]); // shifts for current date
   const [newClockIn, setNewClockIn] = useState("09:00");
   const [newClockOut, setNewClockOut] = useState("17:00");
+  const [calendarMonth, setCalendarMonth] = useState(new Date());
+  const [showChangePasswordDialog, setShowChangePasswordDialog] = useState(false);
+  const [changePasswordLoading, setChangePasswordLoading] = useState(false);
+  const [selectedAppointment, setSelectedAppointment] = useState(null);
 
   const days = getNext7Days();
   const notificationContext = useNotification();
@@ -110,6 +117,15 @@ export default function DoctorMySched({ doctor, onLogout }) {
         ]);
         setSchedule(scheduleData || []);
         setSubmittedSchedules(submittedData || []);
+
+        // Load appointments for the doctor
+        const { data: appointmentsData } = await supabase
+          .from("Appointment")
+          .select("appointmentID, appointment_date, time_slot, status, Patient(name)")
+          .eq("doctorID", doctor.doctorID)
+          .order("appointment_date", { ascending: true });
+        
+        setAppointments(appointmentsData || []);
       } catch (e) {
         console.error("failed to load data", e);
       }
@@ -239,6 +255,105 @@ export default function DoctorMySched({ doctor, onLogout }) {
 
     if (shifts.length === 0) return false;
     return shifts.every(shift => !isShiftInFuture(shift.date));
+  };
+
+  // Get events for a specific date
+  const getEventsForDate = (dateStr) => {
+    const events = {
+      approved: [],
+      completed: [],
+      pending: [],
+      cancelled: [],
+      appointments: []
+    };
+
+    // Get shifts approved
+    submittedSchedules.forEach(s => {
+      if (s.status === 'Approved' && (s.scheduleData?.type || 'Application') === 'Application' && !hasApprovedCancellationRequest(s)) {
+        const shifts = Array.isArray(s.scheduleData?.shifts)
+          ? s.scheduleData.shifts
+          : Array.isArray(s.scheduleData)
+            ? s.scheduleData
+            : [];
+        
+        const hasThisDate = shifts.some(shift => shift.date === dateStr);
+        if (hasThisDate) {
+          if (isShiftInFuture(dateStr)) {
+            events.approved.push(s);
+          } else {
+            events.completed.push(s);
+          }
+        }
+      }
+    });
+
+    // Get pending schedule applications
+    submittedSchedules.forEach(s => {
+      if (s.status === 'For Approval' && (s.scheduleData?.type || 'Application') === 'Application') {
+        const shifts = Array.isArray(s.scheduleData?.shifts)
+          ? s.scheduleData.shifts
+          : Array.isArray(s.scheduleData)
+            ? s.scheduleData
+            : [];
+        
+        const hasThisDate = shifts.some(shift => shift.date === dateStr);
+        if (hasThisDate) {
+          events.pending.push(s);
+        }
+      }
+    });
+
+    // Get cancelled or rejected shifts
+    submittedSchedules.forEach(s => {
+      if ((s.status === 'Rejected' && (s.scheduleData?.type || 'Application') === 'Application') ||
+          (s.status === 'Approved' && (s.scheduleData?.type || 'Application') === 'CancelShift')) {
+        const shifts = Array.isArray(s.scheduleData?.shifts)
+          ? s.scheduleData.shifts
+          : Array.isArray(s.scheduleData)
+            ? s.scheduleData
+            : [];
+        
+        const hasThisDate = shifts.some(shift => shift.date === dateStr);
+        if (hasThisDate) {
+          events.cancelled.push(s);
+        }
+      }
+    });
+
+    // Get appointments for this date
+    const dayAppointments = appointments.filter(a => a.appointment_date === dateStr);
+    // Sort appointments by time (earliest to latest)
+    dayAppointments.sort((a, b) => (a.time_slot || "00:00").localeCompare(b.time_slot || "00:00"));
+    events.appointments = dayAppointments;
+
+    return events;
+  };
+
+  // Get shift status label for a date
+  const getShiftStatusLabel = (dateStr) => {
+    const events = getEventsForDate(dateStr);
+    if (events.approved.length > 0) return 'Shift Approved';
+    if (events.completed.length > 0) return 'Shift Completed';
+    if (events.pending.length > 0) return 'Schedule Applied';
+    if (events.cancelled.length > 0) return 'Shift Cancelled/Rejected';
+    return null;
+  };
+
+  // Generate calendar days
+  const getDaysInMonth = (date) => {
+    return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+  };
+
+  const getFirstDayOfMonth = (date) => {
+    return new Date(date.getFullYear(), date.getMonth(), 1).getDay();
+  };
+
+  const handlePrevMonth = () => {
+    setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1));
+  };
+
+  const handleNextMonth = () => {
+    setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1));
   };
 
   const handleDateSelect = (date) => {
@@ -476,8 +591,8 @@ export default function DoctorMySched({ doctor, onLogout }) {
         <DoctorSidebarHomeLink />
         <div className="flex flex-col items-center mb-8">
           <img src="/doctor.jpg" className="w-20 h-20 rounded-full border-2 border-lightgreen" />
-          <h2 className="text-xl mt-3 font-semibold">Dr. {doctor?.name || "Unknown"}</h2>
-          <p className="text-sm text-hf-blue">{doctor?.specialty || ""}</p>
+          <h2 className="text-xl mt-3 font-semibold text-center">Dr. {doctor?.name || "Unknown"}</h2>
+          <p className="text-sm text-hf-blue text-center">{doctor?.specialty || ""}</p>
         </div>
         <nav className="flex flex-col gap-2">
           <NavItem icon={<LayoutDashboard size={18} />} text="Dashboard" onClick={() => navigate("/doctor/dashboard")} />
@@ -492,6 +607,161 @@ export default function DoctorMySched({ doctor, onLogout }) {
       {/* main content area */}
       <main className="flex-1 p-6">
         <h1 className="text-3xl font-extrabold mb-6">My Schedule</h1>
+
+        {/* Calendar Section */}
+        <div className="bg-white rounded-lg shadow p-6 mb-8">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-2xl font-bold">Schedule Calendar</h2>
+            <div className="flex items-center gap-4">
+              <button
+                onClick={handlePrevMonth}
+                className="px-3 py-2 border border-slate-300 rounded hover:bg-slate-100"
+              >
+                ← Prev
+              </button>
+              <span className="font-semibold min-w-[200px] text-center">
+                {calendarMonth.toLocaleDateString("en-US", { month: "long", year: "numeric" })}
+              </span>
+              <button
+                onClick={handleNextMonth}
+                className="px-3 py-2 border border-slate-300 rounded hover:bg-slate-100"
+              >
+                Next →
+              </button>
+            </div>
+          </div>
+
+          {/* Calendar Legend */}
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6 pb-6 border-b border-slate-200">
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+              <span className="text-sm text-slate-700">Shifts Approved</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+              <span className="text-sm text-slate-700">Shifts Completed</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
+              <span className="text-sm text-slate-700">Schedule Applied</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+              <span className="text-sm text-slate-700">Cancelled/Rejected</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 bg-purple-500 rounded-full"></div>
+              <span className="text-sm text-slate-700">Appointments</span>
+            </div>
+          </div>
+
+          {/* Calendar Grid */}
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr>
+                  {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
+                    <th key={day} className="border border-slate-200 bg-slate-100 p-2 text-sm font-semibold text-slate-700">
+                      {day}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {(() => {
+                  const daysInMonth = getDaysInMonth(calendarMonth);
+                  const firstDay = getFirstDayOfMonth(calendarMonth);
+                  const weeks = [];
+                  let currentWeek = new Array(firstDay).fill(null);
+
+                  for (let day = 1; day <= daysInMonth; day++) {
+                    const date = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), day);
+                    const dateStr = formatDate(date);
+                    const events = getEventsForDate(dateStr);
+
+                    currentWeek.push({ day, dateStr, events });
+
+                    if (currentWeek.length === 7) {
+                      weeks.push(currentWeek);
+                      currentWeek = [];
+                    }
+                  }
+
+                  // Fill remaining days
+                  if (currentWeek.length > 0) {
+                    while (currentWeek.length < 7) {
+                      currentWeek.push(null);
+                    }
+                    weeks.push(currentWeek);
+                  }
+
+                  return weeks.map((week, weekIdx) => (
+                    <tr key={weekIdx}>
+                      {week.map((dayData, dayIdx) => {
+                        let bgColor = 'bg-white';
+                        
+                        // Determine background color based on shifts (priority: approved > completed > pending > cancelled)
+                        if (dayData?.events) {
+                          if (dayData.events.approved.length > 0) {
+                            bgColor = 'bg-green-100';
+                          } else if (dayData.events.completed.length > 0) {
+                            bgColor = 'bg-blue-100';
+                          } else if (dayData.events.pending.length > 0) {
+                            bgColor = 'bg-yellow-100';
+                          } else if (dayData.events.cancelled.length > 0) {
+                            bgColor = 'bg-red-100';
+                          }
+                        }
+
+                        return (
+                          <td
+                            key={dayIdx}
+                            className={`border border-slate-200 p-2 w-32 h-40 align-top ${bgColor} hover:opacity-80 transition cursor-pointer`}
+                          >
+                            {dayData ? (
+                              <div className="flex flex-col h-full">
+                                <div className="font-semibold text-slate-900 mb-2">{dayData.day}</div>
+                                
+                                {/* Shift Status Label */}
+                                {getShiftStatusLabel(dayData.dateStr) && (
+                                  <div className="text-xs font-bold text-slate-800 mb-2 px-2 py-1 bg-white bg-opacity-70 rounded">
+                                    {getShiftStatusLabel(dayData.dateStr)}
+                                  </div>
+                                )}
+                                
+                                {/* Appointments List */}
+                                {dayData.events.appointments.length > 0 && (
+                                  <div className="flex-1 overflow-hidden flex flex-col">
+                                    <div className="text-xs font-semibold text-purple-900 mb-1">Appointments:</div>
+                                    <div className="overflow-y-auto flex-1 space-y-1 pr-1" style={{ maxHeight: '110px' }}>
+                                      {dayData.events.appointments.map((appt, idx) => (
+                                        <div
+                                          key={idx}
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setSelectedAppointment(appt);
+                                          }}
+                                          className="text-xs bg-purple-200 text-purple-900 p-1 rounded border border-purple-300 hover:bg-purple-300 transition cursor-pointer"
+                                        >
+                                          <div className="font-medium truncate">{appt.Patient?.name || 'Patient'}</div>
+                                          <div className="text-purple-800">{appt.time_slot}</div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            ) : null}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ));
+                })()}
+              </tbody>
+            </table>
+          </div>
+        </div>
         
         {/* Set a Schedule Section */}
         <div className="bg-white rounded-lg shadow p-6 mb-8">
@@ -995,6 +1265,64 @@ export default function DoctorMySched({ doctor, onLogout }) {
           </div>
         </div>
       </main>
+
+      {/* Change Password Dialog */}
+      <ChangePasswordDialog
+        isOpen={showChangePasswordDialog}
+        onClose={() => setShowChangePasswordDialog(false)}
+        onSubmit={handleChangePassword}
+        loading={changePasswordLoading}
+      />
+
+      {/* Appointment Details Modal */}
+      {selectedAppointment && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-lg p-6 max-w-sm w-full">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold text-slate-900">Appointment Details</h2>
+              <button
+                onClick={() => setSelectedAppointment(null)}
+                className="text-slate-500 hover:text-slate-700"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <p className="text-xs font-semibold text-slate-600 uppercase">Patient Name</p>
+                <p className="text-sm text-slate-900 font-semibold">{selectedAppointment.Patient?.name || 'Unknown'}</p>
+              </div>
+
+              <div>
+                <p className="text-xs font-semibold text-slate-600 uppercase">Date</p>
+                <p className="text-sm text-slate-900">{selectedAppointment.appointment_date}</p>
+              </div>
+
+              <div>
+                <p className="text-xs font-semibold text-slate-600 uppercase">Time</p>
+                <p className="text-sm text-slate-900">{formatTimeDisplay(selectedAppointment.time_slot)}</p>
+              </div>
+
+              <div>
+                <p className="text-xs font-semibold text-slate-600 uppercase">Status</p>
+                <p className="text-sm text-slate-900 font-semibold capitalize">
+                  {selectedAppointment.status 
+                    ? selectedAppointment.status.replace(/_/g, ' ') 
+                    : 'Unknown'}
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setSelectedAppointment(null)}
+              className="w-full mt-6 bg-hf-blue hover:bg-blue-700 text-white font-semibold py-2 rounded transition"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

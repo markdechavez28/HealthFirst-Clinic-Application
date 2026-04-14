@@ -3,6 +3,7 @@ import { NavLink } from "react-router-dom";
 import { supabasePatient as supabase } from "../utils/supabaseClient";
 import { Loader, ArrowUpDown } from "lucide-react";
 import HomeLogoLink from "../components/HomeLogoLink.jsx";
+import { getStatusMeta, normalizeStatus } from "../utils/statusConstants";
 
 const AdminAppointments = ({ onLogout }) => {
   const [appointments, setAppointments] = useState([]);
@@ -68,50 +69,53 @@ const AdminAppointments = ({ onLogout }) => {
   const VALID_STATUS_VALUES = [
     "ongoing",
     "upcoming",
-    "patient_no_show",
+    "unattended_by_patient",
     "unattended_by_doctor",
-    "completed"
+    "completed",
+    "cancelled_by_doctor",
+    "cancelled_by_patient"
   ];
 
-  const getStatusColor = (status) => {
-    const normalizedStatus = status?.toLowerCase().trim();
+  // Helper function to check if appointment is happening right now (within the 30-min slot)
+  const isAppointmentHappening = (appointment) => {
+    const now = new Date();
+    const [hour, minute] = (appointment.time_slot || "00:00").split(":").map(Number);
+    const apptDateTime = new Date(appointment.appointment_date);
+    apptDateTime.setHours(hour, minute, 0);
     
-    // Map database values to normalized statuses
-    let mappedStatus = normalizedStatus;
-    if (normalizedStatus === "unattended_by_patient") {
-      mappedStatus = "patient_no_show";
-    }
-
-    switch (mappedStatus) {
-      case "upcoming":
-        return "bg-blue-100 text-blue-700";
-      case "ongoing":
-        return "bg-green-100 text-green-700";
-      case "completed":
-        return "bg-gray-100 text-gray-700";
-      case "patient_no_show":
-        return "bg-orange-100 text-orange-700";
-      case "unattended_by_doctor":
-        return "bg-red-100 text-red-700";
-      default:
-        return "bg-slate-100 text-slate-600";
-    }
+    const apptEndTime = new Date(apptDateTime);
+    apptEndTime.setMinutes(apptEndTime.getMinutes() + 30);
+    
+    return now >= apptDateTime && now < apptEndTime;
   };
 
-  const getStatusBadgeText = (status) => {
-    const normalizedStatus = status?.toLowerCase().trim();
+  // Get the display status for an appointment
+  const getDisplayStatus = (appointment) => {
+    const dbStatus = normalizeStatus(appointment.status);
+    
+    // If appointment is happening now, show as Ongoing
+    if (isAppointmentHappening(appointment)) {
+      return "ongoing";
+    }
+    
+    // If status is unknown or empty, treat as Unattended by Doctor
+    if (!dbStatus || !VALID_STATUS_VALUES.includes(dbStatus)) {
+      return "unattended_by_doctor";
+    }
+    
+    return dbStatus;
+  };
 
-    // Map database values to display values
-    const statusMap = {
-      "upcoming": "Upcoming",
-      "ongoing": "Ongoing",
-      "completed": "Completed",
-      "patient_no_show": "Patient No-Show",
-      "unattended_by_patient": "Patient No-Show",
-      "unattended_by_doctor": "Unattended by Doctor"
-    };
+  const getStatusColor = (appointment) => {
+    const displayStatus = getDisplayStatus(appointment);
+    const meta = getStatusMeta(displayStatus);
+    return meta.color;
+  };
 
-    return statusMap[normalizedStatus] || "Unknown Status";
+  const getStatusBadgeText = (appointment) => {
+    const displayStatus = getDisplayStatus(appointment);
+    const meta = getStatusMeta(displayStatus);
+    return meta.label;
   };
 
   // Get unique doctors for filter dropdown
@@ -324,8 +328,8 @@ const AdminAppointments = ({ onLogout }) => {
                               <p className="text-xs text-slate-500">{appt.time_slot}</p>
                             </td>
                             <td className="px-4 py-3">
-                              <span className={`rounded-full px-3 py-1 text-xs font-semibold ${getStatusColor(appt.status)}`}>
-                                {getStatusBadgeText(appt.status)}
+                              <span className={`rounded-full px-3 py-1 text-xs font-semibold ${getStatusColor(appt)}`}>
+                                {getStatusBadgeText(appt)}
                               </span>
                             </td>
                           </tr>

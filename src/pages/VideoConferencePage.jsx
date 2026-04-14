@@ -2,13 +2,43 @@ import React, { useState, useEffect } from "react";
 import { supabasePatient as supabase } from "../utils/supabaseClient";
 import { JitsiMeeting } from "@jitsi/react-sdk";
 import { cancelAppointment } from "../services/patientService";
+import { ChevronUp, ChevronDown } from "lucide-react";
+import { STATUS_META, getStatusMeta } from "../utils/statusConstants";
 
 export function VideoConferencePage({ patient }) {
   const [appointments, setAppointments] = useState([]);
-  const [cancellationLogs, setCancellationLogs] = useState([]);
   const [roomName, setRoomName] = useState("");
   const [showMeeting, setShowMeeting] = useState(false);
   const [activeAppointment, setActiveAppointment] = useState(null);
+  const [sortOrder, setSortOrder] = useState("earliest-first");
+  
+  // State variables for collapsible sections
+  const [showOngoingConsultation, setShowOngoingConsultation] = useState(true);
+  const [showUpcoming, setShowUpcoming] = useState(true);
+  const [showCompleted, setShowCompleted] = useState(true);
+  const [showUnattendedByPatient, setShowUnattendedByPatient] = useState(true);
+  const [showUnattendedByDoctor, setShowUnattendedByDoctor] = useState(true);
+  const [showCancelledByDoctor, setShowCancelledByDoctor] = useState(true);
+  const [showCancelledByPatient, setShowCancelledByPatient] = useState(true);
+
+  // Sort appointments based on sortOrder
+  const getSortedAppointments = (items) => {
+    const sorted = [...items];
+    if (sortOrder === "earliest-first") {
+      sorted.sort((a, b) => {
+        const dateA = new Date(`${a.appointment_date} ${a.time_slot}`);
+        const dateB = new Date(`${b.appointment_date} ${b.time_slot}`);
+        return dateA - dateB;
+      });
+    } else {
+      sorted.sort((a, b) => {
+        const dateA = new Date(`${a.appointment_date} ${a.time_slot}`);
+        const dateB = new Date(`${b.appointment_date} ${b.time_slot}`);
+        return dateB - dateA;
+      });
+    }
+    return sorted;
+  };
 
   useEffect(() => {
     if (!patient?.patientID) return;
@@ -18,18 +48,10 @@ export function VideoConferencePage({ patient }) {
         .from("Appointment")
         .select("*, Doctor(name, specialty)")
         .eq("patientID", patient.patientID)
-        .in("status", ["upcoming", "ongoing", "completed", "unattended_by_patient", "unattended_by_doctor"])
+        .in("status", ["upcoming", "ongoing", "completed", "unattended_by_patient", "unattended_by_doctor", "cancelled_by_patient", "cancelled_by_doctor"])
         .order("appointment_date", { ascending: true });
 
       setAppointments(data || []);
-
-      // Load cancellation logs
-      const { data: logs } = await supabase
-        .from("CancellationLog")
-        .select("*")
-        .eq("patientID", patient.patientID)
-        .order("cancelledAt", { ascending: false });
-      setCancellationLogs(logs || []);
     };
 
     loadAppointments();
@@ -49,6 +71,13 @@ export function VideoConferencePage({ patient }) {
   const handleLeaveConsultation = async () => {
     if (activeAppointment?.appointmentID) {
       try {
+        // If patient leaves without completing, revert status back to "upcoming"
+        console.log(`[VIDEO CONFERENCE] Patient left meeting. Reverting appointment ${activeAppointment.appointmentID} back to "upcoming"`);
+        await supabase
+          .from("Appointment")
+          .update({ status: "upcoming" })
+          .eq("appointmentID", activeAppointment.appointmentID);
+        
         // Reload appointments to see current status
         const { data } = await supabase
           .from("Appointment")
@@ -82,7 +111,7 @@ export function VideoConferencePage({ patient }) {
         .from("Appointment")
         .select("*, Doctor(name, specialty)")
         .eq("patientID", patient.patientID)
-        .in("status", ["upcoming", "ongoing", "completed", "unattended_by_patient", "unattended_by_doctor", "cancelled"])
+        .in("status", ["upcoming", "ongoing", "completed", "unattended_by_patient", "unattended_by_doctor", "cancelled_by_patient", "cancelled_by_doctor"])
         .order("appointment_date", { ascending: true });
       setAppointments(data || []);
       alert("Appointment cancelled successfully!\nYou will receive a 20% refund to your original payment method within 3-5 business days.");
@@ -96,7 +125,7 @@ export function VideoConferencePage({ patient }) {
     return (
       <div className="fixed inset-0 bg-black z-50 flex flex-col">
         <div className="bg-[#0f172a] text-white p-4 flex justify-between items-center">
-          <div>
+          <div className="flex-1 flex flex-col items-center justify-center">
             <h1 className="font-bold text-lg">HealthFirst Consultation</h1>
             <p className="text-sm text-gray-400">
               with Dr. {activeAppointment?.Doctor?.name || "Doctor"}
@@ -121,9 +150,29 @@ export function VideoConferencePage({ patient }) {
             startWithVideoMuted: false,
             prejoinPageEnabled: false,
             disableDeepLinking: true,
+            subject: `Consultation with Dr. ${activeAppointment?.Doctor?.name || "Doctor"}`,
           }}
           userInfo={{
             displayName: patient?.name || "Patient",
+          }}
+          onReadyToClose={async () => {
+            console.log("Patient closed Jitsi. Reverting appointment status back to 'upcoming'");
+            
+            // If patient closes Jitsi without completing through the Leave button,
+            // revert the appointment status back to "upcoming"
+            if (activeAppointment?.appointmentID) {
+              try {
+                await supabase
+                  .from("Appointment")
+                  .update({ status: "upcoming" })
+                  .eq("appointmentID", activeAppointment.appointmentID);
+              } catch (e) {
+                console.error("Error reverting appointment status:", e);
+              }
+            }
+            
+            setShowMeeting(false);
+            return true;
           }}
           getIFrameRef={(ref) => {
             ref.style.height = "100%";
@@ -155,34 +204,46 @@ export function VideoConferencePage({ patient }) {
   };
 
   // Status categories - filtering out past appointments
-  const ongoing = appointments.filter(a => a.status === "ongoing" && isPresentOrFuture(a));
-  const approved = appointments.filter(a => a.status === "upcoming");
-  const completed = appointments.filter(a => a.status === "completed");
-  const unattendedByPatient = appointments.filter(a => a.status === "unattended_by_patient");
-  const unattendedByDoctor = appointments.filter(a => a.status === "unattended_by_doctor");
+  const ongoing = getSortedAppointments(appointments.filter(a => a.status === "ongoing" && isPresentOrFuture(a)));
+  const upcoming = getSortedAppointments(appointments.filter(a => a.status === "upcoming"));
+  const completed = getSortedAppointments(appointments.filter(a => a.status === "completed"));
+  const unattendedByPatient = getSortedAppointments(appointments.filter(a => a.status === "unattended_by_patient"));
+  const unattendedByDoctor = getSortedAppointments(appointments.filter(a => a.status === "unattended_by_doctor"));
+  const cancelledByDoctor = getSortedAppointments(appointments.filter(a => a.status === "cancelled_by_doctor"));
+  const cancelledByPatient = getSortedAppointments(appointments.filter(a => a.status === "cancelled_by_patient"));
 
   return (
     <div className="flex flex-col h-screen">
       <main className="flex-1 p-8 overflow-y-auto">
-        <div className="bg-white px-6 py-4 flex justify-between items-center mb-6" style={{boxShadow: "0 1px 3px rgba(15, 23, 42, 0.08)"}}>
-          <h1 className="text-2xl font-bold text-hf-blue">Online Consultations</h1>
-          <input
-            type="text"
-            placeholder="Search"
-            className="border px-4 py-2 w-64"
-          />
+        <div className="bg-white px-6 py-4 mb-6" style={{boxShadow: "0 1px 3px rgba(15, 23, 42, 0.08)"}}>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <h1 className="text-2xl font-bold text-hf-blue">Online Consultations</h1>
+            <div className="flex items-center gap-3">
+              <label className="text-sm font-semibold text-slate-700">Sort by:</label>
+              <select
+                value={sortOrder}
+                onChange={(e) => setSortOrder(e.target.value)}
+                className="px-3 py-2 text-sm rounded-md border border-slate-300 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-400"
+              >
+                <option value="earliest-first">Earliest to Latest</option>
+                <option value="latest-first">Latest to Earliest</option>
+              </select>
+            </div>
+          </div>
         </div>
 
-       {/* Ongoing Conferences */}
-        <div className="bg-white p-6 mb-6" style={{boxShadow: "0 1px 3px rgba(15, 23, 42, 0.08)"}}>
-          <h2 className="font-semibold mb-4">Ongoing Consultations</h2>
-          {ongoing.length === 0 && <p className="text-slate-400 text-sm">No ongoing consultations</p>}
-          {ongoing.map(appt => (
-            <div key={appt.appointmentID} className="border-2 border-green-500 p-5 flex justify-between items-center bg-green-50 mb-3">
+        {/* Ongoing Consultation */}
+        <Section
+          title="Ongoing Consultation"
+          open={showOngoingConsultation}
+          toggle={() => setShowOngoingConsultation(!showOngoingConsultation)}
+          data={ongoing}
+          empty="No ongoing consultations"
+          render={(appt) => (
+            <div className="border-2 border-green-500 p-5 flex justify-between items-center bg-green-50 mb-3">
               <div>
                 <h3 className="font-bold text-lg">Dr. {appt.Doctor?.name || "Doctor"}</h3>
                 <p className="text-sm text-slate-600">{appt.appointment_date} • {appt.time_slot}</p>
-                <p className="text-sm text-slate-500">Agenda: {appt.reason || "Consultation"}</p>
                 <p className="text-green-600 font-semibold mt-2">Doctor is in the call</p>
               </div>
               <button
@@ -192,19 +253,21 @@ export function VideoConferencePage({ patient }) {
                 Join Consultation
               </button>
             </div>
-          ))}
-        </div>
+          )}
+        />
         
-        {/* Approved consultation - Ready to Join */}
-        <div className="bg-white p-6 mb-6" style={{boxShadow: "0 1px 3px rgba(15, 23, 42, 0.08)"}}>
-          <h2 className="font-semibold mb-4">Upcoming Consultations</h2>
-          {approved.length === 0 && <p className="text-slate-400 text-sm">No upcoming consultations</p>}
-          {approved.map(appt => (
-            <div key={appt.appointmentID} className="bg-blue-100 p-5 flex justify-between items-center mb-4">
+        {/* Upcoming Consultation */}
+        <Section
+          title="Upcoming"
+          open={showUpcoming}
+          toggle={() => setShowUpcoming(!showUpcoming)}
+          data={upcoming}
+          empty="No upcoming consultations"
+          render={(appt) => (
+            <div className="bg-blue-100 p-5 flex justify-between items-center mb-4">
               <div>
                 <h3 className="font-bold text-lg">Dr. {appt.Doctor?.name || "Doctor"}</h3>
                 <p className="text-sm">{appt.appointment_date} • {appt.time_slot}</p>
-                <p className="text-sm opacity-90">Reason: {appt.reason || "Consultation"}</p>
                 <p className="text-blue-700 font-semibold mt-2">Meeting room is open. Expect your doctor to attend according to your booked schedule.</p>
               </div>
               <div className="flex gap-3">
@@ -222,90 +285,139 @@ export function VideoConferencePage({ patient }) {
                 </button>
               </div>
             </div>
-          ))}
-        </div>
+          )}
+        />
 
-        {/* Completed meetings */}
-        <div className="bg-white p-6 mb-6" style={{boxShadow: "0 1px 3px rgba(15, 23, 42, 0.08)"}}>
-          <h2 className="font-semibold mb-4">Completed Consultations</h2>
-          {completed.length === 0 && <p className="text-slate-400 text-sm">No completed consultations</p>}
-          {completed.map(appt => (
-            <div key={appt.appointmentID} className="bg-gray-100 p-5 flex justify-between items-center mb-4">
-              <div>
-                <h3 className="font-bold text-lg">Dr. {appt.Doctor?.name || "Doctor"}</h3>
-                <p className="text-sm">{appt.appointment_date} • {appt.time_slot}</p>
-                <p className="text-sm opacity-90">Reason: {appt.reason || "Consultation"}</p>
-                <p className="text-gray-700 font-semibold mt-2">Completed</p>
+        {/* Completed */}
+        <Section
+          title="Completed"
+          open={showCompleted}
+          toggle={() => setShowCompleted(!showCompleted)}
+          data={completed}
+          empty="No completed consultations"
+          render={(appt) => {
+            const meta = getStatusMeta("completed");
+            return (
+              <div className={`p-5 flex justify-between items-center mb-4 border-2 ${meta.color}`}>
+                <div>
+                  <h3 className="font-bold text-lg">Dr. {appt.Doctor?.name || "Doctor"}</h3>
+                  <p className="text-sm">{appt.appointment_date} • {appt.time_slot}</p>
+                  <p className="font-semibold mt-2">{meta.label}</p>
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
+            );
+          }}
+        />
 
         {/* Unattended by Patient */}
-        <div className="bg-white p-6 mb-6" style={{boxShadow: "0 1px 3px rgba(15, 23, 42, 0.08)"}}>
-          <h2 className="font-semibold mb-4">Patient No-Show</h2>
-          {unattendedByPatient.length === 0 && <p className="text-slate-400 text-sm">No patient no-shows</p>}
-          {unattendedByPatient.map(appt => (
-            <div key={appt.appointmentID} className="bg-orange-100 p-5 flex justify-between items-center mb-4 border-2 border-orange-300">
-              <div>
-                <h3 className="font-bold text-lg">Dr. {appt.Doctor?.name || "Doctor"}</h3>
-                <p className="text-sm">{appt.appointment_date} • {appt.time_slot}</p>
-                <p className="text-sm opacity-90">Reason: {appt.reason || "Consultation"}</p>
-                <p className="text-orange-700 font-semibold mt-2">Patient did not attend</p>
+        <Section
+          title="Unattended by Patient"
+          open={showUnattendedByPatient}
+          toggle={() => setShowUnattendedByPatient(!showUnattendedByPatient)}
+          data={unattendedByPatient}
+          empty="No patient no-shows"
+          render={(appt) => {
+            const meta = getStatusMeta("unattended_by_patient");
+            return (
+              <div className={`p-5 flex justify-between items-center mb-4 border-2 ${meta.color}`}>
+                <div>
+                  <h3 className="font-bold text-lg">Dr. {appt.Doctor?.name || "Doctor"}</h3>
+                  <p className="text-sm">{appt.appointment_date} • {appt.time_slot}</p>
+                  <p className="font-semibold mt-2">Patient did not attend</p>
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
+            );
+          }}
+        />
 
         {/* Unattended by Doctor */}
-        <div className="bg-white p-6 mb-6" style={{boxShadow: "0 1px 3px rgba(15, 23, 42, 0.08)"}}>
-          <h2 className="font-semibold mb-4">Unconfirmed (Doctor did not confirm)</h2>
-          {unattendedByDoctor.length === 0 && <p className="text-slate-400 text-sm">No unconfirmed consultations</p>}
-          {unattendedByDoctor.map(appt => (
-            <div key={appt.appointmentID} className="bg-red-100 p-5 flex justify-between items-center mb-4 border-2 border-red-300">
-              <div>
-                <h3 className="font-bold text-lg">Dr. {appt.Doctor?.name || "Doctor"}</h3>
-                <p className="text-sm">{appt.appointment_date} • {appt.time_slot}</p>
-                <p className="text-sm opacity-90">Reason: {appt.reason || "Consultation"}</p>
-                <p className="text-red-700 font-semibold mt-2">Doctor did not confirm this consultation</p>
+        <Section
+          title="Unattended by Doctor"
+          open={showUnattendedByDoctor}
+          toggle={() => setShowUnattendedByDoctor(!showUnattendedByDoctor)}
+          data={unattendedByDoctor}
+          empty="No unconfirmed consultations"
+          render={(appt) => {
+            const meta = getStatusMeta("unattended_by_doctor");
+            return (
+              <div className={`p-5 flex justify-between items-center mb-4 border-2 ${meta.color}`}>
+                <div>
+                  <h3 className="font-bold text-lg">Dr. {appt.Doctor?.name || "Doctor"}</h3>
+                  <p className="text-sm">{appt.appointment_date} • {appt.time_slot}</p>
+                  <p className="font-semibold mt-2">Doctor did not confirm this consultation</p>
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
+            );
+          }}
+        />
 
         {/* Cancelled by Doctor */}
-        <div className="bg-white p-6 mb-6" style={{boxShadow: "0 1px 3px rgba(15, 23, 42, 0.08)"}}>
-          <h2 className="font-semibold mb-4">Canceled by Doctor</h2>
-          {cancellationLogs.filter(log => log.cancelledBy === "doctor").length === 0 && <p className="text-slate-400 text-sm">No consultations cancelled by doctor</p>}
-          {cancellationLogs.filter(log => log.cancelledBy === "doctor").map(log => (
-            <div key={log.appointmentID} className="bg-red-100 p-5 flex justify-between items-center mb-4 border-2 border-red-300">
-              <div>
-                <h3 className="font-bold text-lg">Dr. {log.doctorID || "Doctor"}</h3>
-                <p className="text-sm">{log.appointmentDate} • {log.timeSlot}</p>
-                <p className="text-red-700 font-semibold mt-2">Doctor cancelled - You will be 100% refunded</p>
+        <Section
+          title="Cancelled by Doctor"
+          open={showCancelledByDoctor}
+          toggle={() => setShowCancelledByDoctor(!showCancelledByDoctor)}
+          data={cancelledByDoctor}
+          empty="No consultations cancelled by doctor"
+          render={(appt) => {
+            const meta = getStatusMeta("cancelled_by_doctor");
+            return (
+              <div className={`p-5 flex justify-between items-center mb-4 border-2 ${meta.color}`}>
+                <div>
+                  <h3 className="font-bold text-lg">Dr. {appt.Doctor?.name || "Doctor"}</h3>
+                  <p className="text-sm">{appt.appointment_date} • {appt.time_slot}</p>
+                  <p className="font-semibold mt-2">Doctor cancelled - You will be 100% refunded</p>
+                </div>
               </div>
-              <span className="text-xs bg-red-200 text-red-800 px-3 py-1 font-semibold">{new Date(log.cancelledAt).toLocaleDateString()}</span>
-            </div>
-          ))}
-        </div>
+            );
+          }}
+        />
 
         {/* Cancelled by Patient */}
-        <div className="bg-white p-6 mb-6" style={{boxShadow: "0 1px 3px rgba(15, 23, 42, 0.08)"}}>
-          <h2 className="font-semibold mb-4">Canceled by You</h2>
-          {cancellationLogs.filter(log => log.cancelledBy === "patient").length === 0 && <p className="text-slate-400 text-sm">No consultations cancelled by you</p>}
-          {cancellationLogs.filter(log => log.cancelledBy === "patient").map(log => (
-            <div key={log.appointmentID} className="bg-orange-100 p-5 flex justify-between items-center mb-4 border-2 border-orange-300">
-              <div>
-                <h3 className="font-bold text-lg">Dr. {log.doctorID || "Doctor"}</h3>
-                <p className="text-sm">{log.appointmentDate} • {log.timeSlot}</p>
-                <p className="text-orange-700 font-semibold mt-2">You cancelled - 20% refund will be processed</p>
+        <Section
+          title="Cancelled by Patient"
+          open={showCancelledByPatient}
+          toggle={() => setShowCancelledByPatient(!showCancelledByPatient)}
+          data={cancelledByPatient}
+          empty="No consultations cancelled by you"
+          render={(appt) => {
+            const meta = getStatusMeta("cancelled_by_patient");
+            return (
+              <div className={`p-5 flex justify-between items-center mb-4 border-2 ${meta.color}`}>
+                <div>
+                  <h3 className="font-bold text-lg">Dr. {appt.Doctor?.name || "Doctor"}</h3>
+                  <p className="text-sm">{appt.appointment_date} • {appt.time_slot}</p>
+                  <p className="font-semibold mt-2">You cancelled - 20% refund will be processed</p>
+                </div>
               </div>
-              <span className="text-xs bg-orange-200 text-orange-800 px-3 py-1 font-semibold">{new Date(log.cancelledAt).toLocaleDateString()}</span>
+            );
+          }}
+        />
+        
+      </main>
+    </div>
+  );
+}
+
+/* Section */
+function Section({ title, open, toggle, data, empty, render }) {
+  return (
+    <div className="bg-white mb-6" style={{boxShadow: "0 1px 3px rgba(15, 23, 42, 0.08)"}}>
+      <button onClick={toggle} className="w-full flex justify-between px-6 py-4 font-semibold bg-gray-100">
+        {title}
+        {open ? <ChevronUp size={18}/> : <ChevronDown size={18}/>}
+      </button>
+
+      {open && (
+        <div className="p-6 space-y-4">
+          {data.length === 0 ? (
+            <p className="text-center text-gray-400">{empty}</p>
+          ) : data.map((item) => (
+            <div key={item.appointmentID || item.cancellationLogID}>
+              {render(item)}
             </div>
           ))}
         </div>
-
-      </main>
+      )}
     </div>
   );
 }

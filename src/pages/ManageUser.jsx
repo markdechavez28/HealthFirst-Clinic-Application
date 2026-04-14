@@ -5,6 +5,34 @@ import { useNotification } from "../hooks/useNotification";
 import { Plus, Edit2, Trash2, Search, Loader, X, AlertCircle } from "lucide-react";
 import HomeLogoLink from "../components/HomeLogoLink.jsx";
 
+function validateContactNumber(number) {
+  // Philippines format: +63 followed by 10 digits (e.g., +63xxxxxxxxxx no spaces for validation)
+  const philippinesRegex = /^\+63\d{10}$/;
+  return philippinesRegex.test(number.replace(/\s/g, ""));
+}
+
+function formatContactNumber(input) {
+  // Remove all non-digit characters except +
+  let cleaned = input.replace(/[^\d+]/g, "");
+  
+  // Ensure it starts with +63
+  if (!cleaned.startsWith("+63")) {
+    return "+63";
+  }
+  
+  // Extract digits after +63
+  const digits = cleaned.replace("+63", "");
+  
+  // Format as +63 xxx xxx xxxx (limit to 10 digits)
+  if (digits.length <= 3) {
+    return `+63 ${digits}`;
+  } else if (digits.length <= 6) {
+    return `+63 ${digits.slice(0, 3)} ${digits.slice(3)}`;
+  } else {
+    return `+63 ${digits.slice(0, 3)} ${digits.slice(3, 6)} ${digits.slice(6, 10)}`;
+  }
+}
+
 const ManageUser = ({ admin, onLogout }) => {
   const { addNotification } = useNotification();
 
@@ -12,6 +40,7 @@ const ManageUser = ({ admin, onLogout }) => {
   const [doctors, setDoctors] = useState([]);
   const [filteredDoctors, setFilteredDoctors] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
+  const [sortBy, setSortBy] = useState("name-asc");
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
@@ -25,7 +54,7 @@ const ManageUser = ({ admin, onLogout }) => {
   const [formData, setFormData] = useState({
     name: "",
     email: "",
-    contact_num: "",
+    contact_num: "+63 ",
     specialty: "",
   });
   
@@ -50,14 +79,29 @@ const ManageUser = ({ admin, onLogout }) => {
     loadDoctors();
   }, []);
 
-  // Filter doctors when search term changes
+  // Filter and sort doctors when search term or sort option changes
   useEffect(() => {
-    const filtered = doctors.filter((doctor) =>
+    let filtered = doctors.filter((doctor) =>
       doctor.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       doctor.email?.toLowerCase().includes(searchTerm.toLowerCase())
     );
-    setFilteredDoctors(filtered);
-  }, [searchTerm, doctors]);
+
+    // Apply sorting
+    const sorted = [...filtered].sort((a, b) => {
+      if (sortBy === "name-asc") {
+        return (a.name || "").localeCompare(b.name || "");
+      } else if (sortBy === "name-desc") {
+        return (b.name || "").localeCompare(a.name || "");
+      } else if (sortBy === "specialty-asc") {
+        return (a.specialty || "").localeCompare(b.specialty || "");
+      } else if (sortBy === "specialty-desc") {
+        return (b.specialty || "").localeCompare(a.specialty || "");
+      }
+      return 0;
+    });
+
+    setFilteredDoctors(sorted);
+  }, [searchTerm, doctors, sortBy]);
 
   const loadDoctors = async () => {
     setLoading(true);
@@ -84,8 +128,9 @@ const ManageUser = ({ admin, onLogout }) => {
     if (!formData.email.trim()) errors.email = "Email is required";
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) errors.email = "Invalid email format";
     if (!formData.specialty.trim()) errors.specialty = "Specialty is required";
-    if (formData.contact_num && !/^\d{10,}$/.test(formData.contact_num.replace(/\D/g, ""))) {
-      errors.contact_num = "Invalid phone number";
+    if (!formData.contact_num.trim()) errors.contact_num = "Contact number is required";
+    else if (!validateContactNumber(formData.contact_num)) {
+      errors.contact_num = "Contact number must be in format +63 xxx xxx xxxx (Philippines)";
     }
     
     // Check email uniqueness if adding new doctor
@@ -101,7 +146,7 @@ const ManageUser = ({ admin, onLogout }) => {
   const handleAddClick = () => {
     setModalMode("add");
     setSelectedDoctor(null);
-    setFormData({ name: "", email: "", contact_num: "", specialty: "" });
+    setFormData({ name: "", email: "", contact_num: "+63 ", specialty: "" });
     setFormErrors({});
     setError("");
     setShowModal(true);
@@ -164,6 +209,8 @@ const ManageUser = ({ admin, onLogout }) => {
         }
         
         // Create doctor profile
+        // Remove spaces from contact number for database storage
+        const cleanContactNumber = formData.contact_num.replace(/\s/g, "");
         const { error: profileError } = await supabase
           .from("Doctor")
           .insert([
@@ -171,7 +218,7 @@ const ManageUser = ({ admin, onLogout }) => {
               doctorID: authData.user.id,
               name: formData.name,
               email: formData.email,
-              contact_num: formData.contact_num,
+              contact_num: cleanContactNumber,
               specialty: formData.specialty,
               date_created: new Date().toISOString().slice(0, 10),
             },
@@ -207,12 +254,14 @@ const ManageUser = ({ admin, onLogout }) => {
         loadDoctors();
       } else {
         // Update doctor profile
+        // Remove spaces from contact number for database storage
+        const cleanContactNumber = formData.contact_num.replace(/\s/g, "");
         const { error: updateError } = await supabase
           .from("Doctor")
           .update({
             name: formData.name,
             email: formData.email,
-            contact_num: formData.contact_num,
+            contact_num: cleanContactNumber,
             specialty: formData.specialty,
           })
           .eq("doctorID", selectedDoctor.doctorID);
@@ -319,16 +368,37 @@ const ManageUser = ({ admin, onLogout }) => {
 
           {/* Controls */}
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="relative flex-1 max-w-md">
-              <Search className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Search by name or email..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-300"
-              />
+            <div className="flex flex-col gap-3 flex-1 sm:flex-row sm:items-end">
+              {/* Search */}
+              <div className="relative flex-1 max-w-md">
+                <Search className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Search by name or email..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-9 pr-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-300"
+                />
+              </div>
+
+              {/* Sort */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-2">
+                  Sort by
+                </label>
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value)}
+                  className="px-3 py-2 text-sm rounded-md border border-slate-300 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                >
+                  <option value="name-asc">Name (A → Z)</option>
+                  <option value="name-desc">Name (Z → A)</option>
+                  <option value="specialty-asc">Specialty (A → Z)</option>
+                  <option value="specialty-desc">Specialty (Z → A)</option>
+                </select>
+              </div>
             </div>
+
             <button
               onClick={handleAddClick}
               className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-hf-blue hover:bg-bgdarkblue rounded-md transition"
@@ -487,15 +557,18 @@ const ManageUser = ({ admin, onLogout }) => {
               {/* Contact */}
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-1">
-                  Contact Number
+                  Contact Number *
                 </label>
                 <input
                   type="tel"
                   value={formData.contact_num}
-                  onChange={(e) => setFormData({ ...formData, contact_num: e.target.value })}
+                  onChange={(e) => {
+                    const formatted = formatContactNumber(e.target.value);
+                    setFormData({ ...formData, contact_num: formatted });
+                  }}
                   className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-300"
                   disabled={isSubmitting}
-                  placeholder="10-digit number"
+                  placeholder="+63 xxx xxx xxxx"
                 />
                 {formErrors.contact_num && (
                   <p className="text-xs text-red-600 mt-1">{formErrors.contact_num}</p>

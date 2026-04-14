@@ -23,25 +23,25 @@ export async function getDoctorProfileByEmail(email) {
 
 // Update doctor password
 export async function updateDoctorPassword(currentPassword, newPassword) {
-  // First verify the current password by attempting to re-authenticate
+  // Get current user
   const { data: { user }, error: userError } = await supabase.auth.getUser();
   if (userError || !user) throw new Error("User not found");
 
-  // Attempt to sign in with current credentials to verify password
+  // Verify current password by re-authenticating
   const { error: signInError } = await supabase.auth.signInWithPassword({
     email: user.email,
-    password: currentPassword
+    password: currentPassword,
   });
-  
+
   if (signInError) {
     throw new Error("Current password is incorrect");
   }
 
-  // If password verification passes, update to new password
+  // If verification passes, update to new password
   const { data, error: updateError } = await supabase.auth.updateUser({
-    password: newPassword
+    password: newPassword,
   });
-  
+
   if (updateError) throw updateError;
   return data;
 }
@@ -52,7 +52,7 @@ export async function getAppointmentsByDoctor(doctorID) {
   // also retrieve any existing Zoom link stored on the appointment
   const { data, error } = await supabase
     .from("Appointment")
-    .select("*, Patient(name, email, contact_num)")
+    .select("*, Patient(name, email, contact_num, age, sex)")
     .eq("doctorID", doctorID)
     .order("appointment_date", { ascending: false });
   if (error) throw error;
@@ -86,10 +86,19 @@ export async function cancelAppointmentForDoctor(appointmentID, appointmentDetai
       appointmentDetails = appt;
     }
 
+    // Generate a random second to bypass DB UNIQUE constraint and free up the slot
+    const randomSec = Math.floor(Math.random() * 59) + 1;
+    const secStr = String(randomSec).padStart(2, '0');
+    const baseTime = appointmentDetails.time_slot.substring(0, 5);
+    const newTimeSlot = `${baseTime}:${secStr}`;
+
     // Update appointment status
     const { error } = await supabase
       .from("Appointment")
-      .update({ status: "cancelled" })
+      .update({ 
+        status: "cancelled_by_doctor",
+        time_slot: newTimeSlot
+      })
       .eq("appointmentID", appointmentID);
 
     if (error) {
@@ -116,7 +125,7 @@ export async function cancelAppointmentForDoctor(appointmentID, appointmentDetai
     }
 
     console.log("[CANCEL SUCCESS] Appointment cancelled by doctor. appointmentID:", appointmentID);
-    return { appointmentID, status: "cancelled", cancelled_by: "doctor" };
+    return { appointmentID, status: "cancelled_by_doctor", cancelled_by: "doctor" };
   } catch (error) {
     console.error("[CANCEL FAIL] Exception during cancellation:", error);
     throw error;
@@ -290,6 +299,57 @@ export async function approveSchedule(submittedScheduleID, adminID) {
   const shifts = submitted.scheduleData?.shifts || submitted.scheduleData || [];
   const requestType = submitted.scheduleData?.type || 'Application';
 
+  // Handle CancelShift requests - mark appointments as unattended_by_doctor
+  if (requestType === 'CancelShift') {
+    // For each shift being cancelled, find and mark all matching appointments as unattended_by_doctor
+    for (const shift of shifts) {
+      const shiftDate = shift.date;
+      const startTime = shift.clockIn || shift.time;
+      const endTime = shift.clockOut;
+      
+      if (!shiftDate || !startTime) continue;
+      
+      // Parse start and end times
+      const [startHour, startMin] = startTime.split(':').map(Number);
+      const [endHour, endMin] = endTime ? endTime.split(':').map(Number) : [startHour + 1, startMin];
+      
+      // Find all appointments for this doctor on this date
+      const { data: appointments, error: apptError } = await supabase
+        .from("Appointment")
+        .select("appointmentID, time_slot")
+        .eq("doctorID", submitted.doctorID)
+        .eq("appointment_date", shiftDate);
+      
+      if (apptError) {
+        console.error("Error fetching appointments for shift cancellation:", apptError);
+        continue;
+      }
+      
+      // Filter appointments that fall within the cancelled shift time
+      const appointmentsToUpdate = appointments.filter(appt => {
+        const [apptHour, apptMin] = (appt.time_slot || "00:00").split(':').map(Number);
+        return apptHour > startHour || 
+               (apptHour === startHour && apptMin >= startMin) &&
+               (apptHour < endHour || (apptHour === endHour && apptMin < endMin));
+      });
+      
+      // Mark these appointments as unattended_by_doctor
+      if (appointmentsToUpdate.length > 0) {
+        const appointmentIDs = appointmentsToUpdate.map(a => a.appointmentID);
+        const { error: updateApptError } = await supabase
+          .from("Appointment")
+          .update({ status: "unattended_by_doctor" })
+          .in("appointmentID", appointmentIDs);
+        
+        if (updateApptError) {
+          console.error("Error updating appointments for shift cancellation:", updateApptError);
+        }
+      }
+    }
+    
+    return [];
+  }
+
   // Only insert into Schedule table if this is an Application, not a CancelShift
   if (requestType === 'Application') {
     // Insert into Schedule table with 30-minute granularity
@@ -428,17 +488,49 @@ export async function getPatientsByDoctor(doctorID) {
   return patients;
 }
 
-export async function getDoctorPatientProfiles() {
-  const { data, error } = await supabase
-    .from("MedicalHistory")
-    .select("*, Patient(*)");
-  if (error) throw error;
-  if (!data) return [];
+export async function getDoctorPatientProfiles(doctorID) {
+  const { data: appointments, error: apptError } = await supabase
+    .from("Appointment")
+    .select("patientID, appointment_date")
+    .eq("doctorID", doctorID)
+    .order("appointment_date", { ascending: true });
+  
+  if (apptError) throw apptError;
 
-  return data.map((history) => ({
-    patientID: history.patientID,
-    medicalHistory: history,
-    ...history.Patient,
+  const patientMap = new Map();
+  appointments.forEach(appt => {
+    if (!patientMap.has(appt.patientID)) {
+      patientMap.set(appt.patientID, appt.appointment_date);
+    }
+  });
+
+  const patientIDs = Array.from(patientMap.keys());
+  if (patientIDs.length === 0) return [];
+
+  const { data: patients, error: patientError } = await supabase
+    .from("Patient")
+    .select("*")
+    .in("patientID", patientIDs);
+
+  if (patientError) throw patientError;
+
+  const { data: medicalHistories, error: historyError } = await supabase
+    .from("MedicalHistory")
+    .select("*")
+    .in("patientID", patientIDs);
+
+  if (historyError && historyError.code !== 'PGRST116') throw historyError;
+
+  const historyMap = new Map();
+  (medicalHistories || []).forEach(history => {
+    historyMap.set(history.patientID, history);
+  });
+
+  return (patients || []).map(patient => ({
+    patientID: patient.patientID,
+    ...patient,
+    medicalHistory: historyMap.get(patient.patientID),
+    firstAppointmentDate: patientMap.get(patient.patientID),
   }));
 }
 

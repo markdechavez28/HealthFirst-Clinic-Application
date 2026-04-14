@@ -11,7 +11,10 @@ import {
   saveMedicalHistory,
   isDoctorTimeslotAvailable,
 } from "../services/patientService.js";
-import { getRecommendedDoctorsForPatient } from "../services/recommendationService.js";
+import {
+  getRecommendedDoctorsForPatient,
+  APPOINTMENT_TYPE_SPECIALTIES,
+} from "../services/recommendationService.js";
 
 // Pricing in pesos
 const APPOINTMENT_PRICING = {
@@ -36,64 +39,6 @@ const APPOINTMENT_TYPES = [
   "Travel health consultation",
   "Joint or bone pain",
 ];
-
-const APPOINTMENT_TYPE_DOCTORS = {
-  "General check-up": [
-    { name: "Alexandra Jimenez", specialty: "Family Medicine", isBest: true },
-    { name: "Nathaniel Oclinaria", specialty: "Preventive Medicine", isBest: false },
-    { name: "Aaron Bayten", specialty: "Internal Medicine", isBest: false },
-  ],
-  "Skin consultation": [
-    { name: "Mark De Chavez", specialty: "Dermatologist", isBest: true },
-    { name: "Alexandra Jimenez", specialty: "Family Medicine", isBest: false },
-    { name: "Nathaniel Oclinaria", specialty: "Preventive Medicine", isBest: false },
-  ],
-  "Ear, nose, or throat concern": [
-    { name: "Josh Allen Lee", specialty: "ENT Specialist", isBest: true },
-    { name: "Alexandra Jimenez", specialty: "Family Medicine", isBest: false },
-    { name: "Aaron Bayten", specialty: "Internal Medicine", isBest: false },
-  ],
-  "Joint or bone pain": [
-    { name: "Aaron Bayten", specialty: "Internal Medicine", isBest: true },
-    { name: "Alexandra Jimenez", specialty: "Family Medicine", isBest: false },
-    { name: "Nathaniel Oclinaria", specialty: "Preventive Medicine", isBest: false },
-  ],
-  "Women's health consultation": [
-    { name: "Carl Jacob Regencia", specialty: "Obstetrics & Gynecology", isBest: true },
-    { name: "Alexandra Jimenez", specialty: "Family Medicine", isBest: false },
-    { name: "Nathaniel Oclinaria", specialty: "Preventive Medicine", isBest: false },
-  ],
-  "Men's health consultation": [
-    { name: "Aaron Bayten", specialty: "Internal Medicine", isBest: true },
-    { name: "Nathaniel Oclinaria", specialty: "Preventive Medicine", isBest: false },
-    { name: "Alexandra Jimenez", specialty: "Family Medicine", isBest: false },
-  ],
-  "Child health consultation": [
-    { name: "Micaela Pimentel", specialty: "Pediatrician", isBest: true },
-    { name: "Alexandra Jimenez", specialty: "Family Medicine", isBest: false },
-    { name: "Aaron Bayten", specialty: "Internal Medicine", isBest: false },
-  ],
-  "Birth control consultation": [
-    { name: "Carl Jacob Regencia", specialty: "Obstetrics & Gynecology", isBest: true },
-    { name: "Alexandra Jimenez", specialty: "Family Medicine", isBest: false },
-    { name: "Nathaniel Oclinaria", specialty: "Preventive Medicine", isBest: false },
-  ],
-  "Laboratory test request": [
-    { name: "Aaron Bayten", specialty: "Internal Medicine", isBest: true },
-    { name: "Nathaniel Oclinaria", specialty: "Preventive Medicine", isBest: false },
-    { name: "Alexandra Jimenez", specialty: "Family Medicine", isBest: false },
-  ],
-  "Medical certificate / clearance": [
-    { name: "Nathaniel Oclinaria", specialty: "Preventive Medicine", isBest: true },
-    { name: "Alexandra Jimenez", specialty: "Family Medicine", isBest: false },
-    { name: "Aaron Bayten", specialty: "Internal Medicine", isBest: false },
-  ],
-  "Travel health consultation": [
-    { name: "Nathaniel Oclinaria", specialty: "Preventive Medicine", isBest: true },
-    { name: "Aaron Bayten", specialty: "Internal Medicine", isBest: false },
-    { name: "Alexandra Jimenez", specialty: "Family Medicine", isBest: false },
-  ],
-};
 
 export function AppointmentsPage({ patient }) {
   const navigate = useNavigate();
@@ -128,6 +73,8 @@ export function AppointmentsPage({ patient }) {
         const recommended = await getRecommendedDoctorsForPatient(
           patient.patientID,
           selectedReason,
+          selectedDate,
+          selectedTime,
           3
         );
         setRecommendedDoctors(recommended);
@@ -138,29 +85,35 @@ export function AppointmentsPage({ patient }) {
       }
     };
     loadRecommendations();
-  }, [selectedReason, patient]);
+  }, [selectedReason, selectedDate, selectedTime, patient]);
 
   const getFilteredDoctors = async () => {
     if (!selectedReason) return [];
 
-    const recommendedDoctorsForReason = APPOINTMENT_TYPE_DOCTORS[selectedReason] || [];
-    
-    let filtered = recommendedDoctorsForReason
-      .map((rec) => {
-        const doctor = doctors.find((d) =>
-          d.name.toLowerCase().includes(rec.name.toLowerCase()) ||
-          rec.name.toLowerCase().includes(d.name.toLowerCase())
-        );
-        return doctor ? { ...doctor, isBest: rec.isBest, recommendationOrder: recommendedDoctorsForReason.indexOf(rec) } : null;
-      })
-      .filter((d) => d !== null)
-      .sort((a, b) => a.recommendationOrder - b.recommendationOrder);
+    // Get specialties for this appointment type
+    const specialtyConfig = APPOINTMENT_TYPE_SPECIALTIES[selectedReason] || {};
+    const recommendedSpecialties = [
+      ...(specialtyConfig.primary || []),
+      ...(specialtyConfig.secondary || []),
+    ];
+
+    // Filter doctors by specialty
+    let filtered = doctors.filter((doctor) =>
+      recommendedSpecialties.includes(doctor.specialty)
+    );
+
+    console.log(
+      `[APPOINTMENTS PAGE] Found ${filtered.length} doctors for ${selectedReason}`
+    );
+    console.log(
+      `[APPOINTMENTS PAGE] Recommended specialties: ${recommendedSpecialties.join(", ")}`
+    );
 
     // If date and time are selected, filter by availability
     if (selectedDate && selectedTime) {
       setCheckingAvailability(true);
       setNoDoctorsAvailable(false);
-      
+
       try {
         const localIso = (d) => {
           const t = new Date(d);
@@ -169,7 +122,7 @@ export function AppointmentsPage({ patient }) {
           const dd = String(t.getDate()).padStart(2, "0");
           return `${y}-${m}-${dd}`;
         };
-        
+
         let apptDate = selectedDate;
         const today = new Date();
         if (apptDate === "Today") apptDate = localIso(today);
@@ -179,13 +132,21 @@ export function AppointmentsPage({ patient }) {
           apptDate = localIso(t);
         }
 
-        console.log(`[FILTERING DOCTORS] Checking availability for date=${apptDate}, time=${selectedTime}, doctors=${filtered.length}`);
+        console.log(
+          `[FILTERING DOCTORS] Checking availability for date=${apptDate}, time=${selectedTime}, doctors=${filtered.length}`
+        );
 
         const availabilityChecks = await Promise.all(
           filtered.map(async (doctor) => {
             try {
-              const available = await isDoctorTimeslotAvailable(doctor.doctorID, apptDate, selectedTime);
-              console.log(`  [DOCTOR] ${doctor.name}: ${available ? 'AVAILABLE' : 'UNAVAILABLE'}`);
+              const available = await isDoctorTimeslotAvailable(
+                doctor.doctorID,
+                apptDate,
+                selectedTime
+              );
+              console.log(
+                `  [DOCTOR] ${doctor.name}: ${available ? "AVAILABLE" : "UNAVAILABLE"}`
+              );
               return { doctor, available };
             } catch (e) {
               console.error(`Error checking availability for ${doctor.name}:`, e);
@@ -198,7 +159,9 @@ export function AppointmentsPage({ patient }) {
           .filter(({ available }) => available)
           .map(({ doctor }) => doctor);
 
-        console.log(`[FILTER RESULT] ${filtered.length} doctors available after slot checks`);
+        console.log(
+          `[FILTER RESULT] ${filtered.length} doctors available after slot checks`
+        );
 
         if (filtered.length === 0) {
           setNoDoctorsAvailable(true);
@@ -376,6 +339,7 @@ export function AppointmentsPage({ patient }) {
           setSelectedDate={setSelectedDate}
           selectedTime={selectedTime}
           setSelectedTime={setSelectedTime}
+          patientID={patient?.patientID}
         />
       )}
 

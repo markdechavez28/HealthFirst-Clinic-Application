@@ -6,14 +6,18 @@ import {
   Video,
   Users,
   Clock,
-  LogOut
+  LogOut,
+  Lock
 } from "lucide-react";
-import { getPatientsByDoctor } from "../services/doctorService";
+import { getPatientsByDoctor, updateDoctorPassword } from "../services/doctorService";
 import DoctorSidebarHomeLink from "../components/DoctorSidebarHomeLink.jsx";
+import ChangePasswordDialog from "../components/ChangePasswordDialog";
 
 export default function DoctorPatientPfp({ doctor, onLogout }) {
   const navigate = useNavigate();
   const [patients, setPatients] = useState([]);
+  const [showChangePasswordDialog, setShowChangePasswordDialog] = useState(false);
+  const [changePasswordLoading, setChangePasswordLoading] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -44,14 +48,15 @@ export default function DoctorPatientPfp({ doctor, onLogout }) {
         <DoctorSidebarHomeLink />
         <div className="flex flex-col items-center mb-8">
           <img src="/doctor.jpg" className="w-20 h-20 rounded-full border-2 border-lightgreen" />
-          <h2 className="text-xl mt-3 font-semibold">Dr. {doctor?.name || "Unknown"}</h2>
-          <p className="text-sm text-hf-blue">{doctor?.specialty || ""}</p>
+          <h2 className="text-xl mt-3 font-semibold text-center">Dr. {doctor?.name || "Unknown"}</h2>
+          <p className="text-sm text-hf-blue text-center">{doctor?.specialty || ""}</p>
         </div>
         <nav className="flex flex-col gap-2">
               <NavItem icon={<LayoutDashboard size={18} />} text="Dashboard" onClick={() => navigate("/doctor/dashboard")} />
           <NavItem icon={<Video size={18} />} text="Online Consultations" onClick={() => navigate("/doctor/vc")} />
           <NavItem icon={<Users size={18} />} text="Patient Profile" active />
           <NavItem icon={<Clock size={18} />} text="My Schedule" onClick={() => navigate("/doctor/schedule")} />
+          <NavItem icon={<Lock size={18} />} text="Change Password" onClick={() => setShowChangePasswordDialog(true)} />
           <NavItem icon={<LogOut size={18} />} text="Logout" onClick={handleLogout} />
         </nav>
       </aside>
@@ -64,16 +69,24 @@ export default function DoctorPatientPfp({ doctor, onLogout }) {
         ) : (
           <ul className="space-y-2">
             {patients.map((p) => (
-              <li key={p.patientID} className="border p-2 rounded">
+              <li key={p.patientID} className="border p-3 rounded">
                 <p className="font-semibold">{p.name}</p>
-                <p className="text-sm">{p.email}</p>
-                <p className="text-sm">{p.contact_num}</p>
+                <p className="text-sm text-slate-600">{p.email}</p>
+                <p className="text-sm text-slate-600">Contact: {p.contact_num}</p>
+                <p className="text-sm text-slate-600">Age: {p.age || "N/A"} years old</p>
+                <p className="text-sm text-slate-600">Sex: {p.sex || "N/A"}</p>
               </li>
             ))}
           </ul>
         )}
-      </main>
-    </div>
+      </main>      
+      {/* Change Password Dialog */}
+      <ChangePasswordDialog
+        isOpen={showChangePasswordDialog}
+        onClose={() => setShowChangePasswordDialog(false)}
+        onSubmit={handleChangePassword}
+        loading={changePasswordLoading}
+      />    </div>
   );
 }
 

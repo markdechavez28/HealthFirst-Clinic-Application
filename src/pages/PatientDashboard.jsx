@@ -3,6 +3,7 @@ import { Icon } from "../components/Icon.jsx";
 import { useNavigate } from "react-router-dom";
 import { supabasePatient as supabase } from "../utils/supabaseClient";
 import { useNotification } from "../hooks/useNotification";
+import { STATUS_META, getStatusMeta } from "../utils/statusConstants";
 
 function Badge({ children }) {
   return (
@@ -25,6 +26,9 @@ export function PatientDashboard({ patient }) {
   const { addNotification } = useNotification();
   const [upcoming, setUpcoming] = useState(null);
   const [consultationHistory, setConsultationHistory] = useState([]);
+  const [upcomingAppointments, setUpcomingAppointments] = useState([]);
+  const [cancelledByPatient, setCancelledByPatient] = useState([]);
+  const [cancelledByDoctor, setCancelledByDoctor] = useState([]);
 
   // debug: log on every render
   console.log("PatientDashboard rendered, patient:", patient);
@@ -64,26 +68,6 @@ export function PatientDashboard({ patient }) {
     load();
   }, [patient]);
 
-  // Sort appointments by date (most recent first), then by time (latest first for same date)
-  const sortConsultationHistory = (appointments) => {
-    return [...appointments].sort((a, b) => {
-      const dateA = new Date(a.appointment_date);
-      const dateB = new Date(b.appointment_date);
-      
-      // If dates are different, most recent first
-      if (dateA.getTime() !== dateB.getTime()) {
-        return dateB.getTime() - dateA.getTime();
-      }
-      
-      // Same date, so sort by time (later time first)
-      const timeA = a.time_slot ? a.time_slot.split(':').map(Number) : [0, 0];
-      const timeB = b.time_slot ? b.time_slot.split(':').map(Number) : [0, 0];
-      const minutesA = timeA[0] * 60 + timeA[1];
-      const minutesB = timeB[0] * 60 + timeB[1];
-      return minutesB - minutesA; // Later time first
-    });
-  };
-
   // Load consultation history
   useEffect(() => {
     if (!patient?.patientID) return;
@@ -96,10 +80,65 @@ export function PatientDashboard({ patient }) {
         .order("appointment_date", { ascending: false })
         .limit(5);
       
-      setConsultationHistory(sortConsultationHistory(data || []));
+      setConsultationHistory(data || []);
     };
 
     loadConsultationHistory();
+  }, [patient]);
+
+  // Load upcoming appointments
+  useEffect(() => {
+    if (!patient?.patientID) return;
+    
+    const loadUpcomingAppointments = async () => {
+      const { data } = await supabase
+        .from("Appointment")
+        .select("*, Doctor(name, specialty)")
+        .eq("patientID", patient.patientID)
+        .in("status", ["upcoming", "ongoing"])
+        .order("appointment_date", { ascending: true })
+        .limit(5);
+      
+      setUpcomingAppointments(data || []);
+    };
+
+    loadUpcomingAppointments();
+  }, [patient]);
+
+  // Load cancelled appointments (future dates only)
+  useEffect(() => {
+    if (!patient?.patientID) return;
+    
+    const loadCancelledAppointments = async () => {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const todayString = today.toISOString().split('T')[0];
+      
+      // Get cancelled by patient
+      const { data: byPatient } = await supabase
+        .from("Appointment")
+        .select("*, Doctor(name, specialty)")
+        .eq("patientID", patient.patientID)
+        .eq("status", "cancelled_by_patient")
+        .gte("appointment_date", todayString)
+        .order("appointment_date", { ascending: false })
+        .limit(5);
+      
+      // Get cancelled by doctor
+      const { data: byDoctor } = await supabase
+        .from("Appointment")
+        .select("*, Doctor(name, specialty)")
+        .eq("patientID", patient.patientID)
+        .eq("status", "cancelled_by_doctor")
+        .gte("appointment_date", todayString)
+        .order("appointment_date", { ascending: false })
+        .limit(5);
+      
+      setCancelledByPatient(byPatient || []);
+      setCancelledByDoctor(byDoctor || []);
+    };
+
+    loadCancelledAppointments();
   }, [patient]);
 
   // Real-time subscription for appointment confirmations
@@ -180,45 +219,110 @@ export function PatientDashboard({ patient }) {
         <h1 className="text-3xl font-extrabold text-hf-blue">Dashboard</h1>
       </header>
 
-      {/* Last 5 Consultations History */}
-      <section className="bg-white p-6 mb-6" style={{boxShadow: "0 1px 3px rgba(15, 23, 42, 0.08)"}}>  
-        <h2 className="text-2xl font-semibold text-slate-900 mb-6">Recent Consultation History</h2>
-        {consultationHistory.length === 0 && <p className="text-slate-400 text-sm">No consultation history</p>}
-        <div className="space-y-3">
-          {consultationHistory.slice(0, 5).map(appt => {
-            const statusColor = {
-              'completed': 'bg-green-100 text-green-800',
-              'cancelled': 'bg-red-100 text-red-800',
-              'upcoming': 'bg-blue-100 text-blue-800',
-              'ongoing': 'bg-yellow-100 text-yellow-800',
-              'unattended_by_patient': 'bg-orange-100 text-orange-800',
-              'unattended_by_doctor': 'bg-purple-100 text-purple-800',
-            }[appt.status] || 'bg-gray-100 text-gray-800'
+      {/* Grid Layout - Upcoming and History */}
+      <div className="grid grid-cols-2 gap-6">
 
-            const statusLabel = {
-              'completed': 'Completed',
-              'cancelled': 'Cancelled',
-              'upcoming': 'Upcoming',
-              'ongoing': 'Ongoing',
-              'unattended_by_patient': 'No-Show',
-              'unattended_by_doctor': 'Doctor No-Show',
-            }[appt.status] || appt.status
+        {/* Upcoming Appointments */}
+        <div className="bg-white p-6" style={{boxShadow: "0 1px 3px rgba(15, 23, 42, 0.08)"}}>
+          <h3 className="font-semibold mb-3">Upcoming Appointments</h3>
+          <div className="space-y-2">
+            {upcomingAppointments.length === 0 ? (
+              <p className="text-sm text-gray-500">No upcoming appointments</p>
+            ) : (
+              upcomingAppointments.slice(0, 5).map((appt) => {
+                const meta = getStatusMeta(appt.status);
 
-            return (
-              <div key={appt.appointmentID} className="border-l-4 border-hf-blue bg-slate-50 p-4 flex justify-between items-start">
-                <div className="flex-1">
-                  <p className="font-semibold text-slate-900">Dr. {appt.Doctor?.name || 'Doctor'}</p>
-                  <p className="text-sm text-slate-600">{appt.Doctor?.specialty}</p>
-                  <p className="text-sm text-slate-600 mt-2">{appt.appointment_date} • {appt.time_slot}</p>
-                </div>
-                <span className={`text-xs font-semibold px-3 py-1 whitespace-nowrap ml-3 ${statusColor}`}>
-                  {statusLabel}
-                </span>
-              </div>
-            )
-          })}
+                return (
+                  <div key={appt.appointmentID} className="bg-gray-50 p-3 flex justify-between items-center">
+                    <div>
+                      <p className="font-semibold text-sm">Dr. {appt.Doctor?.name || "Unknown"}</p>
+                      <p className="text-xs text-gray-500">{appt.appointment_date} {appt.time_slot}</p>
+                    </div>
+                    <span className={`text-xs px-3 py-1 font-semibold whitespace-nowrap ${meta.color}`}>
+                      {meta.label}
+                    </span>
+                  </div>
+                );
+              })
+            )}
+          </div>
         </div>
-      </section>
+
+        {/* Recent Consultation History */}
+        <div className="bg-white p-6" style={{boxShadow: "0 1px 3px rgba(15, 23, 42, 0.08)"}}>
+          <h2 className="font-semibold text-base mb-3">Recent Consultation History</h2>
+          {consultationHistory.length === 0 && <p className="text-slate-400 text-sm">No consultation history</p>}
+          <div className="space-y-2">
+            {consultationHistory.slice(0, 5).map(appt => {
+              const meta = getStatusMeta(appt.status);
+
+              return (
+                <div key={appt.appointmentID} className="border-l-4 border-hf-blue bg-slate-50 p-3 flex justify-between items-start text-sm">
+                  <div>
+                    <p className="font-semibold text-gray-900">Dr. {appt.Doctor?.name || 'Doctor'}</p>
+                    <p className="text-xs text-gray-600 mt-1">{appt.appointment_date} • {appt.time_slot}</p>
+                  </div>
+                  <span className={`text-xs font-semibold px-2 py-1 whitespace-nowrap ml-3 ${meta.color}`}>
+                    {meta.label}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* Cancelled by Patient */}
+        <div className="bg-white p-6" style={{boxShadow: "0 1px 3px rgba(15, 23, 42, 0.08)"}}>
+          <h3 className="font-semibold mb-3">Cancelled by You</h3>
+          <div className="space-y-2">
+            {cancelledByPatient.length === 0 ? (
+              <p className="text-sm text-gray-500">No cancelled appointments</p>
+            ) : (
+              cancelledByPatient.slice(0, 5).map((appt) => {
+                const meta = getStatusMeta(appt.status);
+
+                return (
+                  <div key={appt.appointmentID} className="bg-gray-50 p-3 flex justify-between items-center">
+                    <div>
+                      <p className="font-semibold text-sm">Dr. {appt.Doctor?.name || "Unknown"}</p>
+                      <p className="text-xs text-gray-500">{appt.appointment_date} {appt.time_slot}</p>
+                    </div>
+                    <span className={`text-xs px-3 py-1 font-semibold whitespace-nowrap ${meta.color}`}>
+                      {meta.label}
+                    </span>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+
+        {/* Cancelled by Doctor */}
+        <div className="bg-white p-6" style={{boxShadow: "0 1px 3px rgba(15, 23, 42, 0.08)"}}>
+          <h3 className="font-semibold mb-3">Cancelled by Doctor</h3>
+          <div className="space-y-2">
+            {cancelledByDoctor.length === 0 ? (
+              <p className="text-sm text-gray-500">No cancelled appointments</p>
+            ) : (
+              cancelledByDoctor.slice(0, 5).map((appt) => {
+                const meta = getStatusMeta(appt.status);
+
+                return (
+                  <div key={appt.appointmentID} className="bg-gray-50 p-3 flex justify-between items-center">
+                    <div>
+                      <p className="font-semibold text-sm">Dr. {appt.Doctor?.name || "Unknown"}</p>
+                      <p className="text-xs text-gray-500">{appt.appointment_date} {appt.time_slot}</p>
+                    </div>
+                    <span className={`text-xs px-3 py-1 font-semibold whitespace-nowrap ${meta.color}`}>
+                      {meta.label}
+                    </span>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

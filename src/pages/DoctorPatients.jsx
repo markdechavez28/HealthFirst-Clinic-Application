@@ -15,7 +15,6 @@ import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { getDoctorPatientProfiles, updateDoctorPassword } from "../services/doctorService";
 import ChangePasswordDialog from "../components/ChangePasswordDialog";
-import DoctorSidebarHomeLink from "../components/DoctorSidebarHomeLink.jsx";
 
 export default function DoctorPatients({ doctor, onLogout }) {
   const navigate = useNavigate();
@@ -25,9 +24,9 @@ export default function DoctorPatients({ doctor, onLogout }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [showFilter, setShowFilter] = useState(false);
   const [activeFilters, setActiveFilters] = useState([]);
+  const [sortOrder, setSortOrder] = useState("latest");
   const [showChangePasswordDialog, setShowChangePasswordDialog] = useState(false);
   const [changePasswordLoading, setChangePasswordLoading] = useState(false);
-  const [sortOrder, setSortOrder] = useState("latest");
   // Fetch patients from database
   useEffect(() => {
     const loadPatients = async () => {
@@ -38,8 +37,8 @@ export default function DoctorPatients({ doctor, onLogout }) {
           return;
         }
 
-        // Load patient profile data directly from MedicalHistory
-        const patientsData = await getDoctorPatientProfiles();
+        // Load patient profile data for this doctor's patients
+        const patientsData = await getDoctorPatientProfiles(doctor.doctorID);
         const patientsWithHistory = patientsData.map((patient) => {
           const medicalHistory = patient.medicalHistory;
           const gender = patient.sex
@@ -62,6 +61,7 @@ export default function DoctorPatients({ doctor, onLogout }) {
             additionalDetails: medicalHistory?.additionalDetails || "N/A",
             purpose: "Consultation",
             status: "completed",
+            firstAppointmentDate: patient.firstAppointmentDate,
           };
         });
 
@@ -107,14 +107,14 @@ export default function DoctorPatients({ doctor, onLogout }) {
 
     return searchMatch && genderMatch;
   }).sort((a, b) => {
-    // Sort by patient ID (assuming newer patients have higher IDs)
-    const idA = parseInt(a.patientId.replace(/\D/g, "")) || 0;
-    const idB = parseInt(b.patientId.replace(/\D/g, "")) || 0;
+    // Sort by first appointment date with this doctor
+    const dateA = new Date(a.firstAppointmentDate || 0).getTime();
+    const dateB = new Date(b.firstAppointmentDate || 0).getTime();
     
     if (sortOrder === "latest") {
-      return idB - idA; // Newer first
+      return dateB - dateA; // Most recent patient first
     } else {
-      return idA - idB; // Older first
+      return dateA - dateB; // Oldest patient first
     }
   });
 
@@ -144,12 +144,14 @@ export default function DoctorPatients({ doctor, onLogout }) {
     <div className="min-h-screen flex bg-[#f2f2f2] font-hammersmith">
       {/* SIDEBAR */}
       <aside className="w-64 bg-hf-sidebar p-6 flex flex-col" style={{boxShadow: "0 1px 3px rgba(15, 23, 42, 0.08)"}}>
-        <DoctorSidebarHomeLink />
+        <div className="flex justify-center mb-6">
+          <img src="/hf-logo.png" className="h-[40px]" />
+        </div>
 
         <div className="flex flex-col items-center mb-8">
           <img src="/doctor.jpg" className="w-20 h-20 rounded-full border-2 border-lightgreen" />
-          <h2 className="text-xl mt-3 font-semibold">Dr. {doctor?.name || "Unknown"}</h2>
-          <p className="text-sm text-txtblue">{doctor?.specialty || "Specialist"}</p>
+          <h2 className="text-xl mt-3 font-semibold text-center">Dr. {doctor?.name || "Unknown"}</h2>
+          <p className="text-sm text-txtblue text-center">{doctor?.specialty || "Specialist"}</p>
         </div>
 
         <nav className="flex flex-col gap-2">
@@ -168,14 +170,14 @@ export default function DoctorPatients({ doctor, onLogout }) {
           <h2 className="text-2xl text-txtblue">Patient Profile</h2>
           <div className="flex justify-end items-center gap-3 relative">
             <div className="relative w-64">
-              <Search size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Search"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-3 pr-4 py-1.5 text-sm border rounded-full focus:outline-none focus:ring-2 focus:ring-bglightblue"
-              />
+            <Search size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Search"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-3 pr-4 py-1.5 text-sm border rounded-full focus:outline-none focus:ring-2 focus:ring-bglightblue"
+            />
             </div>
 
             {/* Sort Dropdown */}
@@ -189,32 +191,31 @@ export default function DoctorPatients({ doctor, onLogout }) {
               <option value="earliest">Earliest</option>
             </select>
 
-            <button
-              onClick={() => setShowFilter(!showFilter)}
-              className="filter-button bg-bgdarkblue text-white p-2 rounded-lg"
-            >
-              <Filter size={18} />
-            </button>
+          <button
+            onClick={() => setShowFilter(!showFilter)}
+            className="filter-button bg-bgdarkblue text-white p-2 rounded-lg"
+          >
+            <Filter size={18} />
+          </button>
 
-            {showFilter && (
-              <div className="filter-popup absolute right-0 top-12 bg-white shadow rounded-lg p-2 w-52 z-10">
-                <div className="p-1 font-semibold text-sm text-gray-700 border-b mb-2">Filter by Gender</div>
-                {filterOptions.map((f) => (
-                  <label key={f} className="flex items-center gap-2 p-1 cursor-pointer hover:bg-gray-50">
-                    <input
-                      type="checkbox"
-                      checked={activeFilters.includes(f)}
-                      onChange={(e) => {
-                        if (e.target.checked) setActiveFilters([...activeFilters, f]);
-                        else setActiveFilters(activeFilters.filter((af) => af !== f));
-                      }}
-                    />
-                    <span className="text-sm">{f}</span>
-                  </label>
-                ))}
-              </div>
-            )}
-          </div>
+          {showFilter && (
+            <div className="filter-popup absolute right-0 top-12 bg-white shadow rounded-lg p-2 w-52 z-10">
+              {filterOptions.map((f) => (
+                <label key={f} className="flex items-center gap-2 p-1">
+                  <input
+                    type="checkbox"
+                    checked={activeFilters.includes(f)}
+                    onChange={(e) => {
+                      if (e.target.checked) setActiveFilters([...activeFilters, f]);
+                      else setActiveFilters(activeFilters.filter((af) => af !== f));
+                    }}
+                  />
+                  <span className="text-sm">{f}</span>
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -235,7 +236,6 @@ export default function DoctorPatients({ doctor, onLogout }) {
                 </div>
 
                 <p className="font-semibold text-lg">{p.name}</p>
-                <p className="text-xs text-gray-500">ID: {p.patientId || "-"}</p>
 
                 <div className="text-sm mt-2 space-y-1 text-txtgray">
                   <p>Gender: {p.gender || "-"}</p>
@@ -257,6 +257,7 @@ export default function DoctorPatients({ doctor, onLogout }) {
         </div>
       </main>
 
+      {/* Change Password Dialog */}
       <ChangePasswordDialog
         isOpen={showChangePasswordDialog}
         onClose={() => setShowChangePasswordDialog(false)}

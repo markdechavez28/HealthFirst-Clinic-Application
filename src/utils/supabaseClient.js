@@ -195,7 +195,7 @@ export const appointmentService = {
       .select(
         `
         *,
-        patientID:Patient(name,email,contact_num),
+        patientID:Patient(name,email,contact_num,age,sex),
         doctorID:Doctor(name,email,specialty)
       `
       );
@@ -228,7 +228,7 @@ export const appointmentService = {
       .select(
         `
         *,
-        patientID:Patient(name,email,contact_num),
+        patientID:Patient(name,email,contact_num,age,sex),
         doctorID:Doctor(name,email,specialty)
       `
       )
@@ -291,12 +291,10 @@ export const appointmentService = {
       .select(
         `
         *,
-        patientID:Patient(name,email,contact_num),
+        patientID:Patient(name,email,contact_num,age,sex),
         doctorID:Doctor(name,email,specialty)
       `
       );
-
-    // Search in patient name or email
     if (searchTerm) {
       query = query.or(
         `patientID.name.ilike.%${searchTerm}%,patientID.email.ilike.%${searchTerm}%,doctorID.name.ilike.%${searchTerm}%`

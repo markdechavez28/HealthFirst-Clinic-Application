@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import AuthLayout from "../components/AuthLayout.jsx";
+import { getPatientByEmail } from "../services/patientService";
 import healthLogo from "../assets/logo.png"; 
 export default function LoginPage({ onLogin, onGoRegister }) {
   const navigate = useNavigate();
@@ -11,6 +12,8 @@ export default function LoginPage({ onLogin, onGoRegister }) {
   const [showResetModal, setShowResetModal] = useState(false);
   const [resetEmail, setResetEmail] = useState("");
   const [resetSent, setResetSent] = useState(false);
+  const [resetError, setResetError] = useState("");
+  const [resetLoading, setResetLoading] = useState(false);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -21,19 +24,36 @@ export default function LoginPage({ onLogin, onGoRegister }) {
     if (!res?.ok) setError(res?.message || "Login failed.");
   };
 
-  const handlePasswordReset = (e) => {
+  const handlePasswordReset = async (e) => {
     e.preventDefault();
+    setResetError("");
     if (!resetEmail.trim()) {
-      alert("Please enter your email address");
+      setResetError("Please enter your email address");
       return;
     }
-    setResetSent(true);
-    // Auto-reset after 4 seconds
-    setTimeout(() => {
-      setResetSent(false);
-      setResetEmail("");
-      setShowResetModal(false);
-    }, 4000);
+    setResetLoading(true);
+    try {
+      // Check if patient with this email exists
+      const patient = await getPatientByEmail(resetEmail);
+      if (!patient) {
+        setResetError("The account is not registered");
+        setResetLoading(false);
+        return;
+      }
+      setResetSent(true);
+      // Auto-reset after 4 seconds
+      setTimeout(() => {
+        setResetSent(false);
+        setResetEmail("");
+        setShowResetModal(false);
+        setResetError("");
+      }, 4000);
+    } catch (error) {
+      console.error("Password reset error:", error);
+      setResetError("The account is not registered");
+    } finally {
+      setResetLoading(false);
+    }
   };
 
   return (
@@ -151,20 +171,31 @@ export default function LoginPage({ onLogin, onGoRegister }) {
                     placeholder="Enter your email"
                     className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-hf-blue/40 focus:border-hf-blue mb-4"
                     required
+                    disabled={resetLoading}
                   />
+                  {resetError && (
+                    <div className="rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700 mb-4">
+                      {resetError}
+                    </div>
+                  )}
                   <div className="flex gap-2">
                     <button
                       type="button"
-                      onClick={() => setShowResetModal(false)}
-                      className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold hover:bg-slate-50"
+                      onClick={() => {
+                        setShowResetModal(false);
+                        setResetError("");
+                      }}
+                      className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                      disabled={resetLoading}
                     >
                       Cancel
                     </button>
                     <button
                       type="submit"
-                      className="flex-1 rounded-lg bg-hf-blue text-white px-3 py-2 text-sm font-semibold hover:bg-hf-blueDark"
+                      disabled={resetLoading}
+                      className="flex-1 rounded-lg bg-hf-blue text-white px-3 py-2 text-sm font-semibold hover:bg-hf-blueDark disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      Send Reset Link
+                      {resetLoading ? "Checking..." : "Send Reset Link"}
                     </button>
                   </div>
                 </form>

@@ -20,6 +20,16 @@ export async function createPatientProfile({ patientID, name, email, contact_num
   return data;
 }
 
+export async function getPatientByEmail(email) {
+  const { data, error } = await supabase
+    .from("Patient")
+    .select("*")
+    .eq("email", email)
+    .single();
+  if (error) throw error;
+  return data;
+}
+
 // Update patient password
 export async function updatePatientPassword(currentPassword, newPassword) {
   // First verify the current password by attempting to re-authenticate
@@ -56,6 +66,57 @@ export async function getAppointmentsByPatient(patientID) {
   return data;
 }
 
+/**
+ * Get a patient's appointments for a specific date
+ * @param {string} patientID - The patient's ID
+ * @param {string} appointmentDate - The date to check (YYYY-MM-DD format)
+ * @returns {Promise<Array>} Array of time slots the patient already has appointments for (HH:MM format)
+ */
+export async function getPatientAppointmentsForDate(patientID, appointmentDate) {
+  try {
+    const { data, error } = await supabase
+      .from("Appointment")
+      .select("time_slot")
+      .eq("patientID", patientID)
+      .eq("appointment_date", appointmentDate)
+      .in("status", ["upcoming", "pending", "ongoing"]);
+    
+    if (error) {
+      console.error(`[PATIENT APPOINTMENTS] Error fetching appointments for date ${appointmentDate}:`, error);
+      return [];
+    }
+    
+    // Normalize time_slot values to HH:MM format (handles various DB formats)
+    const bookedSlots = (data || []).map(appt => {
+      let timeSlot = appt.time_slot;
+      
+      // Log raw value for debugging
+      console.log(`[PATIENT APPOINTMENTS] Raw time_slot from DB:`, timeSlot, `Type:`, typeof timeSlot);
+      
+      // If it's a string with seconds (HH:MM:SS), extract just HH:MM
+      if (typeof timeSlot === 'string' && timeSlot.length > 5) {
+        timeSlot = timeSlot.substring(0, 5); // "09:00:00" → "09:00"
+      }
+      
+      // If it's a timestamp string, extract HH:MM
+      if (typeof timeSlot === 'string' && timeSlot.includes('T')) {
+        const parts = timeSlot.split('T'); // "2026-04-14T09:00:00" → ["2026-04-14", "09:00:00"]
+        timeSlot = parts[1].substring(0, 5); // "09:00:00" → "09:00"
+      }
+      
+      return timeSlot;
+    });
+    
+    console.log(`[PATIENT APPOINTMENTS] ✅ Normalized booked slots on ${appointmentDate}:`, bookedSlots);
+    console.log(`[PATIENT APPOINTMENTS] Patient has ${bookedSlots.length} appointments: ${bookedSlots.join(", ")}`);
+    
+    return bookedSlots;
+  } catch (error) {
+    console.error(`[PATIENT APPOINTMENTS] Exception fetching appointments:`, error);
+    return [];
+  }
+}
+
 export async function getUpcomingAppointment(patientID) {
   const d = new Date();
   const y = d.getFullYear();
@@ -86,6 +147,28 @@ export async function createAppointment({ patientID, doctorID, appointment_date,
     console.error(`[BOOKING ERROR] Cannot book appointment in the past. Requested: ${appointmentDateTime}, Current: ${now}`);
     throw new Error(
       `Cannot book an appointment for a time that has already passed. Please select a future date and time.`
+    );
+  }
+  
+  // Validate that this patient doesn't already have an appointment at this exact time
+  const { data: existingPatientAppointment, error: checkError } = await supabase
+    .from("Appointment")
+    .select("appointmentID")
+    .eq("patientID", patientID)
+    .eq("appointment_date", appointment_date)
+    .eq("time_slot", time_slot)
+    .in("status", ["upcoming", "pending"])
+    .single();
+  
+  if (checkError && checkError.code !== "PGRST116") {
+    console.error(`[BOOKING ERROR] Error checking for existing patient appointments:`, checkError);
+    throw new Error(`Failed to verify appointment availability`);
+  }
+  
+  if (existingPatientAppointment) {
+    console.error(`[BOOKING ERROR] Patient already has an appointment at this time`);
+    throw new Error(
+      `You already have an appointment at this time. Please select a different time slot.`
     );
   }
   
@@ -199,10 +282,19 @@ export async function cancelAppointment(appointmentID, appointmentDetails = null
       appointmentDetails = appt;
     }
 
+    // Generate a random second to bypass DB UNIQUE constraint and free up the slot
+    const randomSec = Math.floor(Math.random() * 59) + 1;
+    const secStr = String(randomSec).padStart(2, '0');
+    const baseTime = appointmentDetails.time_slot.substring(0, 5);
+    const newTimeSlot = `${baseTime}:${secStr}`;
+
     // Update appointment status
     const { error } = await supabase
       .from("Appointment")
-      .update({ status: "cancelled" })
+      .update({ 
+        status: "cancelled_by_patient",
+        time_slot: newTimeSlot
+      })
       .eq("appointmentID", appointmentID);
     
     if (error) {
@@ -280,42 +372,41 @@ export async function saveMedicalHistory({ patientID, height, weight, bloodPress
 export async function isDoctorTimeslotAvailable(doctorID, appointment_date, time_slot) {
   console.log(`[SLOT AVAILABILITY CHECK] doctorID=${doctorID}, date=${appointment_date}, time_slot=${time_slot}`);
   
-  // First, check if slot is already booked (confirmed/pending appointments take priority)
-  // This prevents race conditions where multiple bookings happen simultaneously
+  // Validate the appointment is in the future and during business hours
+  const now = new Date();
+  const appointmentDateTime = new Date(`${appointment_date}T${time_slot}`);
+  
+  if (appointmentDateTime <= now) {
+    console.log(`  ❌ Appointment time is in the past`);
+    return false;
+  }
+  
+  // Check business hours (9 AM - 5 PM)
+  const [hours, minutes] = time_slot.split(':').map(Number);
+  if (hours < 9 || hours >= 17) {
+    console.log(`  ❌ Time is outside business hours (9 AM - 5 PM)`);
+    return false;
+  }
+  
+  // First, check if slot is already booked (confirmed/pending/ongoing appointments)
+  // This prevents double booking and race conditions
   const { data: existingAppointments, error: appointmentError } = await supabase
     .from("Appointment")
     .select("appointmentID, status")
     .eq("doctorID", doctorID)
     .eq("appointment_date", appointment_date)
     .eq("time_slot", time_slot)
-    .in("status", ["upcoming", "ongoing", "completed", "pending"]);
+    .in("status", ["upcoming", "ongoing", "pending"]);
 
   if (appointmentError) throw appointmentError;
   
   if (existingAppointments && existingAppointments.length > 0) {
-    console.log(`  Slot is already booked - ${existingAppointments.length} appointment(s) exist with statuses: ${existingAppointments.map(a => a.status).join(", ")}`);
+    console.log(`  ❌ Slot is already booked - ${existingAppointments.length} appointment(s) exist with statuses: ${existingAppointments.map(a => a.status).join(", ")}`);
     return false;
   }
 
-  // Check if doctor has available schedule for this time slot
-  const { data: schedule, error: scheduleError } = await supabase
-    .from("Schedule")
-    .select("*")
-    .eq("doctorID", doctorID)
-    .eq("available_date", appointment_date)
-    .eq("time_slot", time_slot)
-    .eq("is_available", true)
-    .single();
-
-  if (scheduleError && scheduleError.code !== "PGRST116") throw scheduleError;
-  
-  if (!schedule) {
-    console.log(`  Doctor has not scheduled this time slot`);
-    return false;
-  }
-
-  console.log(`  Schedule entry exists for this time slot`);
-  console.log(`  AVAILABLE: Slot is free and ready to book`);
+  // If we reach here, the slot is available (no conflicts, future time, business hours)
+  console.log(`  ✅ AVAILABLE: Slot is free and ready to book`);
   return true;
 }
 

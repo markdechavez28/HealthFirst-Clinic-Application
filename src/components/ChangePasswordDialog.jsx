@@ -10,6 +10,35 @@ export default function ChangePasswordDialog({ isOpen, onClose, onSubmit, loadin
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState("");
 
+  const validatePassword = (password) => {
+    const requirements = {
+      minLength: password.length >= 8,
+      hasUppercase: /[A-Z]/.test(password),
+      hasLowercase: /[a-z]/.test(password),
+      hasNumber: /[0-9]/.test(password),
+      hasSpecialChar: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password),
+    };
+    return requirements;
+  };
+
+  const getPasswordValidationMessage = (password) => {
+    const requirements = validatePassword(password);
+    const messages = [];
+    
+    if (!requirements.minLength) messages.push("At least 8 characters");
+    if (!requirements.hasUppercase) messages.push("One uppercase letter");
+    if (!requirements.hasLowercase) messages.push("One lowercase letter");
+    if (!requirements.hasNumber) messages.push("One number");
+    if (!requirements.hasSpecialChar) messages.push("One special character");
+    
+    return messages.length > 0 ? `Missing: ${messages.join(", ")}` : null;
+  };
+
+  const isPasswordValid = (password) => {
+    const requirements = validatePassword(password);
+    return Object.values(requirements).every(req => req === true);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
@@ -24,8 +53,8 @@ export default function ChangePasswordDialog({ isOpen, onClose, onSubmit, loadin
       return;
     }
 
-    if (newPassword.length < 6) {
-      setError("New password must be at least 6 characters long");
+    if (!isPasswordValid(newPassword)) {
+      setError(getPasswordValidationMessage(newPassword) || "Password does not meet requirements");
       return;
     }
 
@@ -107,9 +136,24 @@ export default function ChangePasswordDialog({ isOpen, onClose, onSubmit, loadin
                 {showNewPassword ? <Eye size={18} /> : <EyeOff size={18} />}
               </button>
             </div>
-            <p className="text-xs text-slate-500 mt-1">
-              At least 6 characters required
-            </p>
+            <div className="text-xs text-slate-600 mt-2 space-y-1">
+              <p className="font-medium">Password requirements:</p>
+              <p className={validatePassword(newPassword).minLength ? "text-green-600" : "text-slate-500"}>
+                ✓ At least 8 characters
+              </p>
+              <p className={validatePassword(newPassword).hasUppercase ? "text-green-600" : "text-slate-500"}>
+                ✓ One uppercase letter (A-Z)
+              </p>
+              <p className={validatePassword(newPassword).hasLowercase ? "text-green-600" : "text-slate-500"}>
+                ✓ One lowercase letter (a-z)
+              </p>
+              <p className={validatePassword(newPassword).hasNumber ? "text-green-600" : "text-slate-500"}>
+                ✓ One number (0-9)
+              </p>
+              <p className={validatePassword(newPassword).hasSpecialChar ? "text-green-600" : "text-slate-500"}>
+                ✓ One special character (!@#$%^&*, etc.)
+              </p>
+            </div>
           </div>
 
           {/* Confirm Password */}

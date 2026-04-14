@@ -163,6 +163,24 @@ export function EPrescriptionForm({ doctor, patient, consultationDate, onClose, 
 
               <div>
                 <label className="block text-xs font-semibold text-slate-600 mb-1">
+                  Patient Age
+                </label>
+                <div className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-slate-900">
+                  {patient?.age || "N/A"} years old
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">
+                  Patient Sex
+                </label>
+                <div className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-slate-900">
+                  {patient?.sex || "N/A"}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">
                   Date of Consultation
                 </label>
                 <div className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-slate-900">
