@@ -10,24 +10,49 @@ const AdminPatients = ({ onLogout }) => {
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [sortOrder, setSortOrder] = useState("desc");
+  const [sortBy, setSortBy] = useState("name"); // "name" or "age"
+  const [sexFilter, setSexFilter] = useState("all"); // "all", "M", "F"
 
   useEffect(() => {
     loadPatients();
   }, []);
 
   useEffect(() => {
-    const filtered = patients.filter(
-      (patient) =>
+    const filtered = patients.filter((patient) => {
+      // Search filter (name, email, phone)
+      const matchesSearch =
         patient.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        patient.email?.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+        patient.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        patient.contact_num?.includes(searchTerm);
+
+      // Sex filter - normalize to M, F, or U (undeclared)
+      let matchesSex = true;
+      if (sexFilter !== "all") {
+        const rawSex = (patient.sex || "").trim().toLowerCase();
+
+        let normalizedSex = "";
+        if (rawSex.startsWith("m")) normalizedSex = "M";
+        else if (rawSex.startsWith("f")) normalizedSex = "F";
+        else if (rawSex === "") normalizedSex = "U"; // Undeclared/empty
+
+        matchesSex = normalizedSex === sexFilter;
+
+        console.log(`[SEX FILTER FIXED] ${patient.name}: raw="${patient.sex}" normalized="${normalizedSex}" filterValue="${sexFilter}" matches=${matchesSex}`);
+      }
+
+      return matchesSearch && matchesSex;
+    });
     setFilteredPatients(filtered);
-  }, [searchTerm, patients]);
+  }, [searchTerm, patients, sexFilter]);
 
   const loadPatients = async () => {
     setLoading(true);
     try {
       const data = await userService.getAllUsers();
+      // Debug: Log all sex values
+      const sexValues = data.map(p => p.sex).filter(s => s);
+      console.log("[SEX FILTER DEBUG] All sex values in database:", sexValues);
+      console.log("[SEX FILTER DEBUG] Unique sex values:", [...new Set(sexValues)]);
       // Sort by name (A-Z)
       const sorted = data.sort((a, b) => {
         const nameA = (a.name || "").toLowerCase();
@@ -45,15 +70,28 @@ const AdminPatients = ({ onLogout }) => {
 
   const getSortedPatients = () => {
     const sorted = [...filteredPatients].sort((a, b) => {
-      const nameA = (a.name || "").toLowerCase();
-      const nameB = (b.name || "").toLowerCase();
-      
-      if (sortOrder === "desc") {
-        // Z-A (reverse alphabetical)
-        return nameB.localeCompare(nameA);
+      if (sortBy === "age") {
+        // Sort by age
+        const ageA = parseInt(a.age) || 0;
+        const ageB = parseInt(b.age) || 0;
+        
+        if (sortOrder === "desc") {
+          return ageB - ageA; // Oldest first
+        } else {
+          return ageA - ageB; // Youngest first
+        }
       } else {
-        // A-Z (alphabetical)
-        return nameA.localeCompare(nameB);
+        // Sort by name (default)
+        const nameA = (a.name || "").toLowerCase();
+        const nameB = (b.name || "").toLowerCase();
+        
+        if (sortOrder === "desc") {
+          // Z-A (reverse alphabetical)
+          return nameB.localeCompare(nameA);
+        } else {
+          // A-Z (alphabetical)
+          return nameA.localeCompare(nameB);
+        }
       }
     });
     return sorted;
@@ -144,7 +182,7 @@ const AdminPatients = ({ onLogout }) => {
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search patients by name or email..."
+              placeholder="Search patients by name, email, or phone..."
               className="w-full rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 pr-10 text-sm outline-none focus:ring-2 focus:ring-blue-300 focus:border-hf-blue"
             />
             <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500">
@@ -155,17 +193,42 @@ const AdminPatients = ({ onLogout }) => {
           {/* Patients List - Scrollable Container */}
           <div className="rounded-lg border border-slate-200 bg-white overflow-hidden" style={{boxShadow: "0 1px 3px rgba(15, 23, 42, 0.08)"}}>
             <div className="bg-slate-50 px-6 py-4 border-b border-slate-200">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-semibold text-slate-900">
                   Patients ({filteredPatients.length})
                 </h2>
-                <button
-                  onClick={() => setSortOrder(sortOrder === "desc" ? "asc" : "desc")}
-                  className="flex items-center gap-2 rounded-md bg-hf-blue px-3 py-2 text-sm font-semibold text-white hover:bg-bgdarkblue"
-                >
-                  <ArrowUpDown className="w-4 h-4" />
-                  {sortOrder === "desc" ? "Z-A" : "A-Z"}
-                </button>
+                <div className="flex gap-2">
+                  {/* Sex Filter */}
+                  <select
+                    value={sexFilter}
+                    onChange={(e) => setSexFilter(e.target.value)}
+                    className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
+                  >
+                    <option value="all">All Sex</option>
+                    <option value="M">Male</option>
+                    <option value="F">Female</option>
+                    <option value="U">Undeclared</option>
+                  </select>
+
+                  {/* Sort By Selection */}
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value)}
+                    className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
+                  >
+                    <option value="name">Sort by Name</option>
+                    <option value="age">Sort by Age</option>
+                  </select>
+
+                  {/* Sort Order Toggle */}
+                  <button
+                    onClick={() => setSortOrder(sortOrder === "desc" ? "asc" : "desc")}
+                    className="flex items-center gap-2 rounded-md bg-hf-blue px-3 py-2 text-sm font-semibold text-white hover:bg-bgdarkblue"
+                  >
+                    <ArrowUpDown className="w-4 h-4" />
+                    {sortBy === "name" ? (sortOrder === "desc" ? "Z-A" : "A-Z") : (sortOrder === "desc" ? "High-Low" : "Low-High")}
+                  </button>
+                </div>
               </div>
               {loading && <Loader className="h-5 w-5 animate-spin text-hf-blue" />}
             </div>

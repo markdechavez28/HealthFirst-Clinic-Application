@@ -12,6 +12,7 @@ const AdminAppointments = ({ onLogout }) => {
   const [error, setError] = useState(null);
   const [sortBy, setSortBy] = useState("date-desc");
   const [filterDoctor, setFilterDoctor] = useState("");
+  const [filterStatus, setFilterStatus] = useState("");
 
   useEffect(() => {
     const fetchAppointments = async () => {
@@ -101,9 +102,14 @@ const AdminAppointments = ({ onLogout }) => {
   // Get unique doctors for filter dropdown
   const uniqueDoctors = Array.from(
     new Map(
-      appointments.map((appt) => [appt.doctorID, appt.Doctor])
+      appointments.map((appt) => [appt.doctorID, { ...appt.Doctor, doctorID: appt.doctorID }])
     ).values()
   ).sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+
+  // Get unique statuses for filter dropdown
+  const uniqueStatuses = Array.from(
+    new Set(appointments.map((appt) => getDisplayStatus(appt)))
+  ).sort();
 
   // Filter and sort appointments
   const getProcessedAppointments = () => {
@@ -112,6 +118,11 @@ const AdminAppointments = ({ onLogout }) => {
     // Apply doctor filter
     if (filterDoctor) {
       filtered = filtered.filter((appt) => appt.doctorID === filterDoctor);
+    }
+
+    // Apply status filter
+    if (filterStatus) {
+      filtered = filtered.filter((appt) => getDisplayStatus(appt) === filterStatus);
     }
 
     // Apply sorting
@@ -250,6 +261,25 @@ const AdminAppointments = ({ onLogout }) => {
                         </select>
                       </div>
 
+                      {/* Status Filter */}
+                      <div className="flex-1">
+                        <label className="block text-xs font-semibold text-slate-600 mb-2">
+                          Filter by Status
+                        </label>
+                        <select
+                          value={filterStatus}
+                          onChange={(e) => setFilterStatus(e.target.value)}
+                          className="w-full px-3 py-2 text-sm rounded-md border border-slate-300 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                        >
+                          <option value="">All Statuses</option>
+                          {uniqueStatuses.map((status) => (
+                            <option key={status} value={status}>
+                              {getStatusMeta(status).label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
                       {/* Sort Options */}
                       <div className="flex-1">
                         <label className="block text-xs font-semibold text-slate-600 mb-2">
@@ -280,7 +310,6 @@ const AdminAppointments = ({ onLogout }) => {
                         <tr>
                           <th className="px-4 py-3 font-semibold">Patient</th>
                           <th className="px-4 py-3 font-semibold">Doctor</th>
-                          <th className="px-4 py-3 font-semibold">Type</th>
                           <th className="px-4 py-3 font-semibold">Schedule</th>
                           <th className="px-4 py-3 font-semibold">Status</th>
                         </tr>
@@ -299,9 +328,6 @@ const AdminAppointments = ({ onLogout }) => {
                                 <p className="font-semibold">Dr. {appt.Doctor?.name || "Unknown"}</p>
                                 <p className="text-xs text-slate-500">{appt.Doctor?.specialty || ""}</p>
                               </div>
-                            </td>
-                            <td className="px-4 py-3">
-                              {appt.consultationType || "Consultation"}
                             </td>
                             <td className="px-4 py-3">
                               <p className="font-medium">{appt.appointment_date}</p>

@@ -38,7 +38,15 @@ export default function DoctorDashboard({ doctor, onLogout }) {
           .eq("doctorID", doctor.doctorID)
           .order("appointment_date", { ascending: false })
           .limit(5);
-        setConsultationHistory(history || []);
+        
+        // Sort by date and time (latest first)
+        const sorted = (history || []).sort((a, b) => {
+          const dateTimeA = new Date(`${a.appointment_date} ${a.time_slot}`);
+          const dateTimeB = new Date(`${b.appointment_date} ${b.time_slot}`);
+          return dateTimeB - dateTimeA;
+        });
+        
+        setConsultationHistory(sorted);
       } catch (e) {
         console.error("failed to load doctor appointments", e);
       }
@@ -76,8 +84,17 @@ export default function DoctorDashboard({ doctor, onLogout }) {
           .order("appointment_date", { ascending: false })
           .limit(5);
         
-        setCancelledByPatient(byPatient || []);
-        setCancelledByDoctor(byDoctor || []);
+        // Sort by date and time (latest first)
+        const sortByDateTime = (appointments) => {
+          return (appointments || []).sort((a, b) => {
+            const dateTimeA = new Date(`${a.appointment_date} ${a.time_slot}`);
+            const dateTimeB = new Date(`${b.appointment_date} ${b.time_slot}`);
+            return dateTimeB - dateTimeA;
+          });
+        };
+        
+        setCancelledByPatient(sortByDateTime(byPatient));
+        setCancelledByDoctor(sortByDateTime(byDoctor));
       } catch (e) {
         console.error("failed to load cancelled appointments", e);
       }
@@ -136,7 +153,12 @@ export default function DoctorDashboard({ doctor, onLogout }) {
   // Filter today's appointments (statuses may be lowercase now)
   const todayAppointments = appointments
     .filter(isFutureOrPresent)
-    .filter((a) => a.status === "ongoing" || a.status === "upcoming");
+    .filter((a) => a.status === "ongoing" || a.status === "upcoming")
+    .sort((a, b) => {
+      const dateTimeA = new Date(`${a.appointment_date}T${a.time_slot}`);
+      const dateTimeB = new Date(`${b.appointment_date}T${b.time_slot}`);
+      return dateTimeB - dateTimeA;
+    });
 
   // No more pending requests since appointments are auto-confirmed
   const pendingRequests = [];

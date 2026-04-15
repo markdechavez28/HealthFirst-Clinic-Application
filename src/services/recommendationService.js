@@ -52,10 +52,6 @@ export const APPOINTMENT_TYPE_SPECIALTIES = {
     primary: ["Internal Medicine"],
     secondary: ["Family Medicine", "Preventive Medicine"],
   },
-  "Medical certificate / clearance": {
-    primary: ["Preventive Medicine"],
-    secondary: ["Family Medicine"],
-  },
   "Travel health consultation": {
     primary: ["Preventive Medicine"],
     secondary: ["Family Medicine"],
@@ -125,11 +121,6 @@ const APPOINTMENT_TYPE_DOCTORS = {
     { name: "Aaron Bayten", specialty: "Internal Medicine", isBest: true },
     { name: "Nathaniel Oclinaria", specialty: "Preventive Medicine", isBest: false },
     { name: "Alexandra Jimenez", specialty: "Family Medicine", isBest: false },
-  ],
-  "Medical certificate / clearance": [
-    { name: "Nathaniel Oclinaria", specialty: "Preventive Medicine", isBest: true },
-    { name: "Alexandra Jimenez", specialty: "Family Medicine", isBest: false },
-    { name: "Aaron Bayten", specialty: "Internal Medicine", isBest: false },
   ],
   "Travel health consultation": [
     { name: "Nathaniel Oclinaria", specialty: "Preventive Medicine", isBest: true },

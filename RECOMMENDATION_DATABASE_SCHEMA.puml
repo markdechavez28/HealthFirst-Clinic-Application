@@ -1,0 +1,82 @@
+@startuml RecommendationDatabaseSchema
+
+!define PRIMARY_KEY_COLOR #FFE5B4
+!define FOREIGN_KEY_COLOR #B4D7FF
+!define INDEX_COLOR #D7FFB4
+
+title Recommendation Algorithm - Database Schema & Entity Relationships
+
+entity "Appointments" as Appointments {
+  *id : UUID <<PRIMARY_KEY_COLOR>>
+  --
+  *patient_id : UUID <<FOREIGN_KEY_COLOR>>
+  *doctor_id : UUID <<FOREIGN_KEY_COLOR>>
+  *appointment_date : DATE <<INDEX_COLOR>>
+  *time_slot : VARCHAR(5) <<INDEX_COLOR>>
+  appointment_type : VARCHAR(100)
+  status : VARCHAR(20)
+  rating : INTEGER (1-5, nullable)
+  notes : TEXT
+  created_at : TIMESTAMP
+  updated_at : TIMESTAMP
+  --
+  <<Indexes>>
+  (patient_id, appointment_date)
+  (doctor_id, appointment_date, time_slot)
+  (status, patient_id)
+}
+
+entity "Doctors" as Doctors {
+  *id : UUID <<PRIMARY_KEY_COLOR>>
+  --
+  name : VARCHAR(255)
+  specialty : VARCHAR(100) <<INDEX_COLOR>>
+  email : VARCHAR(255)
+  phone : VARCHAR(20)
+  qualifications : TEXT
+  available : BOOLEAN
+  created_at : TIMESTAMP
+  --
+  <<Indexes>>
+  (specialty)
+  (available, specialty)
+}
+
+entity "Doctor_Schedules" as DoctorSchedules {
+  *id : UUID <<PRIMARY_KEY_COLOR>>
+  --
+  *doctor_id : UUID <<FOREIGN_KEY_COLOR>>
+  *schedule_date : DATE <<INDEX_COLOR>>
+  *time_slot : VARCHAR(5) <<INDEX_COLOR>>
+  clock_in : TIME
+  clock_out : TIME
+  is_approved : BOOLEAN
+  created_at : TIMESTAMP
+  --
+  <<Indexes>>
+  (doctor_id, schedule_date)
+  (schedule_date, time_slot)
+  (doctor_id, is_approved)
+}
+
+entity "Patients" as Patients {
+  *id : UUID <<PRIMARY_KEY_COLOR>>
+  --
+  user_id : UUID
+  name : VARCHAR(255)
+  email : VARCHAR(255)
+  phone : VARCHAR(20)
+  date_of_birth : DATE
+  gender : VARCHAR(10)
+  created_at : TIMESTAMP
+  --
+  <<Indexes>>
+  (user_id)
+}
+
+' Relationships
+Appointments }o--|| Patients : "patient_id"
+Appointments }o--|| Doctors : "doctor_id"
+DoctorSchedules }o--|| Doctors : "doctor_id"
+
+@enduml

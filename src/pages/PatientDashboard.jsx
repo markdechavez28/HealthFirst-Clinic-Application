@@ -80,7 +80,14 @@ export function PatientDashboard({ patient }) {
         .order("appointment_date", { ascending: false })
         .limit(5);
       
-      setConsultationHistory(data || []);
+      // Sort by date and time (latest first)
+      const sorted = (data || []).sort((a, b) => {
+        const dateTimeA = new Date(`${a.appointment_date} ${a.time_slot}`);
+        const dateTimeB = new Date(`${b.appointment_date} ${b.time_slot}`);
+        return dateTimeB - dateTimeA;
+      });
+      
+      setConsultationHistory(sorted);
     };
 
     loadConsultationHistory();
@@ -96,10 +103,20 @@ export function PatientDashboard({ patient }) {
         .select("*, Doctor(name, specialty)")
         .eq("patientID", patient.patientID)
         .in("status", ["upcoming", "ongoing"])
-        .order("appointment_date", { ascending: true })
         .limit(5);
       
-      setUpcomingAppointments(data || []);
+      // Sort by date and time (earliest first)
+      if (data && data.length > 0) {
+        const sorted = [...data].sort((a, b) => {
+          const dateTimeA = new Date(`${a.appointment_date}T${a.time_slot}`);
+          const dateTimeB = new Date(`${b.appointment_date}T${b.time_slot}`);
+          console.log(`[UPCOMING SORT] ${a.Doctor?.name}: ${a.appointment_date} ${a.time_slot}`, dateTimeA);
+          return dateTimeB - dateTimeA;
+        });
+        setUpcomingAppointments(sorted);
+      } else {
+        setUpcomingAppointments(data || []);
+      }
     };
 
     loadUpcomingAppointments();
@@ -134,8 +151,17 @@ export function PatientDashboard({ patient }) {
         .order("appointment_date", { ascending: false })
         .limit(5);
       
-      setCancelledByPatient(byPatient || []);
-      setCancelledByDoctor(byDoctor || []);
+      // Sort by date and time (latest first)
+      const sortByDateTime = (appointments) => {
+        return (appointments || []).sort((a, b) => {
+          const dateTimeA = new Date(`${a.appointment_date} ${a.time_slot}`);
+          const dateTimeB = new Date(`${b.appointment_date} ${b.time_slot}`);
+          return dateTimeB - dateTimeA;
+        });
+      };
+      
+      setCancelledByPatient(sortByDateTime(byPatient));
+      setCancelledByDoctor(sortByDateTime(byDoctor));
     };
 
     loadCancelledAppointments();

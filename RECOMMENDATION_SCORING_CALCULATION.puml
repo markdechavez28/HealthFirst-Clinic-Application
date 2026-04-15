@@ -1,0 +1,243 @@
+@startuml RecommendationScoringCalculation
+
+!define INPUT_COLOR #E3F2FD
+!define PROCESS_COLOR #FFF3E0
+!define OUTPUT_COLOR #E8F5E9
+!define CALC_COLOR #F3E5F5
+
+title Recommendation Algorithm - Scoring Calculation Flow
+
+== STEP 1: Determine Patient Type ==
+
+start
+:Receive availableDoctors list
+and appointmentHistory;
+
+:Check if appointmentHistory
+is empty;
+
+if (Has appointment history?) then (YES)
+  :👤 RETURNING PATIENT
+  Use formula:
+  Score = 60 + freq + rating;
+  note on the right : isNewPatient = false
+else (NO)
+  :👤 NEW PATIENT
+  Use formula:
+  Score = 80 + ratingBonus;
+  note on the right : isNewPatient = true
+endif
+
+== STEP 2: Build Visit Statistics Map ==
+
+:Create empty map:
+doctorVisits = {};
+
+note right : Structure:
+  {
+    "doc1": {
+      count: N,
+      avgRating: N.N,
+      lastVisit: Date
+    }
+  }
+
+:For each appointment in history:
+- Extract doctorId
+- Increment visit count
+- Record date;
+
+:For each doctor in map:
+Call calculateAvgRating(doctorId)
+to get average of all ratings;
+
+note right
+  Example:
+  doc1 ratings: [5, 5, 4]
+  avgRating = 14/3 = 4.67
+end note
+
+== STEP 3: Score Each Available Doctor ==
+
+:For each doctor in availableDoctors:;
+
+if (Is new patient?) then (Yes)
+  partition "NEW PATIENT SCORING" #INPUT_COLOR {
+    :Look up doctor in history
+    doctorVisits[doctor.id];
+    
+    if (Doctor found in history?) then (YES)
+      :avgRating = doctorVisits[doctor.id].avgRating;
+      :ratingBonus = (avgRating / 5) × 20;
+      :score = 80 + ratingBonus;
+    else (NO)
+      :No rating history
+      ratingBonus = 0;
+      :score = 80;
+    endif
+  }
+else (No)
+  partition "RETURNING PATIENT SCORING" #PROCESS_COLOR {
+    :visitCount = doctorVisits[doctor.id]?.count || 0;
+    
+    if (Doctor has history?) then (YES)
+      :avgRating = doctorVisits[doctor.id].avgRating;
+    else (NO)
+      :avgRating = 0;
+    endif
+    
+    :Calculate Frequency Score:
+    frequencyScore = min(visitCount / 5, 1) × 25;
+    
+    note right
+      Examples:
+      0 visits → 0 × 25 = 0
+      1 visit → 0.2 × 25 = 5
+      2 visits → 0.4 × 25 = 10
+      3 visits → 0.6 × 25 = 15
+      4 visits → 0.8 × 25 = 20
+      5+ visits → 1.0 × 25 = 25
+    end note
+    
+    :Calculate Rating Score:
+    ratingScore = (avgRating / 5) × 15;
+    
+    note right
+      Examples:
+      0 stars → 0 × 15 = 0
+      2 stars → 0.4 × 15 = 6
+      4 stars → 0.8 × 15 = 12
+      5 stars → 1.0 × 15 = 15
+    end note
+    
+    :Specialization Score (constant):
+    specializationScore = 60;
+    
+    note right
+      Always 60 because doctors
+      are pre-filtered by specialty
+    end note
+    
+    :TOTAL SCORE:
+    score = 60 + frequencyScore + ratingScore;
+  }
+endif
+
+:Attach score to doctor object:
+doctor.score = score;
+
+:Return: Array of doctors with scores;
+
+== STEP 4: Sorting ==
+
+:Sort doctors array by score DESC
+(highest score first);
+
+note right
+  JavaScript sort:
+  doctors.sort((a, b) => b.score - a.score)
+end note
+
+== STEP 5: Extract Top N ==
+
+:Slice array to get top N results:
+topDoctors = doctors.slice(0, limit);
+
+note right : limit = 3 (by default)
+
+== STEP 6: Format for Display ==
+
+:For each doctor in topDoctors:;
+
+if (doctor.visits > 0) then (YES)
+  if (doctor.visits == 1) then (Single)
+    :displayText = "1 visit";
+  else (Multiple)
+    :displayText = "{visits} visits";
+  endif
+  
+  if (doctor.avgRating > 0) then (YES)
+    :displayText += " • {rating}";
+  endif
+else (NO)
+  :displayText = "New to you";
+endif
+
+:Return formatted doctor with display text;
+
+: End;
+
+== VISUAL SCORING EXAMPLES ==
+
+box "📊 EXAMPLE 1: High-Frequency, Highly-Rated Doctor" #E8F5E9
+  Dr. De Chavez - Dermatologist
+  
+  **History:**
+  - Visit 1: 2025-12-20, Rating: ⭐⭐⭐⭐⭐ (5)
+  - Visit 2: 2025-10-10, Rating: ⭐⭐⭐⭐⭐ (5)
+  
+  **Calculation (Returning Patient):**
+  Frequency: min(2/5, 1) × 25 = 0.4 × 25 = **10 points**
+  Rating: (5.0/5) × 15 = 1.0 × 15 = **15 points**
+  Specialization: = **60 points**
+  
+  **TOTAL: 60 + 10 + 15 = 85 points**
+  Display: "2 visits • 5.0" ✅
+end box
+
+box "📊 EXAMPLE 2: Moderate Frequency, Good Rating" #FFF3E0
+  Dr. Aaron Bayten - Internal Medicine
+  
+  **History:**
+  - Visit 1: 2025-11-15, Rating: ⭐⭐⭐⭐ (4)
+  
+  **Calculation (Returning Patient):**
+  Frequency: min(1/5, 1) × 25 = 0.2 × 25 = **5 points**
+  Rating: (4.0/5) × 15 = 0.8 × 15 = **12 points**
+  Specialization: = **60 points**
+  
+  **TOTAL: 60 + 5 + 12 = 77 points**
+  Display: "1 visit • 4.0" 
+end box
+
+box "📊 EXAMPLE 3: No History (New Patient)" #E3F2FD
+  Dr. Andra Jimenez - Family Medicine
+  
+  **History:** None
+  
+  **Calculation (New Patient):**
+  Baseline: = **80 points**
+  Rating Bonus: (0/5) × 20 = **0 points**
+  
+  **TOTAL: 80 + 0 = 80 points**
+  Display: "New to you"
+end box
+
+box "📊 EXAMPLE 4: First-Time Visit (Returning Patient)" #F3E5F5
+  Dr. Angela Samboa - Ophthalmologist
+  
+  **History:** None from this doctor
+  
+  **Calculation (Returning Patient):**
+  Frequency: min(0/5, 1) × 25 = 0 × 25 = **0 points**
+  Rating: (0/5) × 15 = 0 × 15 = **0 points**
+  Specialization: = **60 points**
+  
+  **TOTAL: 60 + 0 + 0 = 60 points**
+  Display: "New to you"
+end box
+
+== RANKING RESULTS ==
+
+box "🏆 Final Recommendation Ranking (Top 3)" #D4EDDA
+  1️⃣  Dr. De Chavez - Score: **85** ✅ BEST RECOMMENDATION
+  2️⃣  Dr. Aaron Bayten - Score: **77**
+  3️⃣  Dr. Jimenez / Dr. Samboa - Score: **80/60**
+  
+  **Display Order:**
+  ✅ Familiar doctor with excellent history
+  ✅ Doctor with good experience
+  ✅ New doctors or lower scores
+end box
+
+@enduml

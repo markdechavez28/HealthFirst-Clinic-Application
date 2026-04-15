@@ -4,6 +4,7 @@ import { JitsiMeeting } from "@jitsi/react-sdk";
 import { cancelAppointment } from "../services/patientService";
 import { ChevronUp, ChevronDown } from "lucide-react";
 import { STATUS_META, getStatusMeta } from "../utils/statusConstants";
+import { PatientMeetingEndDialog } from "../components/PatientMeetingEndDialog";
 
 export function VideoConferencePage({ patient }) {
   const [appointments, setAppointments] = useState([]);
@@ -11,6 +12,7 @@ export function VideoConferencePage({ patient }) {
   const [showMeeting, setShowMeeting] = useState(false);
   const [activeAppointment, setActiveAppointment] = useState(null);
   const [sortOrder, setSortOrder] = useState("earliest-first");
+  const [showEndDialog, setShowEndDialog] = useState(false);
   
   // State variables for collapsible sections
   const [showOngoingConsultation, setShowOngoingConsultation] = useState(true);
@@ -69,16 +71,43 @@ export function VideoConferencePage({ patient }) {
 
   // Handle patient leaving the meeting
   const handleLeaveConsultation = async () => {
-    if (activeAppointment?.appointmentID) {
+    // Show the end dialog to let patient choose an action
+    setShowEndDialog(true);
+  };
+
+  // Handle the result from the end dialog
+  const handleEndDialogClose = async (action) => {
+    setShowEndDialog(false);
+
+    if (action === "leave") {
+      // Patient chose to just leave temporarily - revert to upcoming
+      if (activeAppointment?.appointmentID) {
+        try {
+          console.log(`[VIDEO CONFERENCE] Patient left meeting. Reverting appointment ${activeAppointment.appointmentID} back to "upcoming"`);
+          await supabase
+            .from("Appointment")
+            .update({ status: "upcoming" })
+            .eq("appointmentID", activeAppointment.appointmentID);
+          
+          // Reload appointments to see current status
+          const { data } = await supabase
+            .from("Appointment")
+            .select("*, Doctor(name, specialty)")
+            .eq("patientID", patient.patientID)
+            .in("status", ["upcoming", "ongoing", "completed", "unattended_by_patient", "unattended_by_doctor"])
+            .order("appointment_date", { ascending: true });
+          setAppointments(data || []);
+        } catch (e) {
+          console.error("Error reloading appointments:", e);
+        }
+      }
+      setShowMeeting(false);
+    }
+    // If action is "unattended_by_doctor", the PatientMeetingEndDialog already handled the status update
+    // Just close the meeting
+    if (action === "unattended_by_doctor") {
+      // Reload appointments
       try {
-        // If patient leaves without completing, revert status back to "upcoming"
-        console.log(`[VIDEO CONFERENCE] Patient left meeting. Reverting appointment ${activeAppointment.appointmentID} back to "upcoming"`);
-        await supabase
-          .from("Appointment")
-          .update({ status: "upcoming" })
-          .eq("appointmentID", activeAppointment.appointmentID);
-        
-        // Reload appointments to see current status
         const { data } = await supabase
           .from("Appointment")
           .select("*, Doctor(name, specialty)")
@@ -89,8 +118,8 @@ export function VideoConferencePage({ patient }) {
       } catch (e) {
         console.error("Error reloading appointments:", e);
       }
+      setShowMeeting(false);
     }
-    setShowMeeting(false);
   };
 
   // Handle canceling an appointment
@@ -124,6 +153,14 @@ export function VideoConferencePage({ patient }) {
   if (showMeeting && roomName) {
     return (
       <div className="fixed inset-0 bg-black z-50 flex flex-col">
+        {showEndDialog && activeAppointment && (
+          <PatientMeetingEndDialog
+            appointment={activeAppointment}
+            patient={patient}
+            onClose={handleEndDialogClose}
+          />
+        )}
+        
         <div className="bg-[#0f172a] text-white p-4 flex justify-between items-center">
           <div className="flex-1 flex flex-col items-center justify-center">
             <h1 className="font-bold text-lg">HealthFirst Consultation</h1>

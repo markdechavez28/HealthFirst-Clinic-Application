@@ -1,0 +1,229 @@
+@startuml RecommendationAlgorithmDataFlow
+
+!define ENTITY_COLOR #E1F5FE
+!define SERVICE_COLOR #FFF3E0
+!define ENGINE_COLOR #F3E5F5
+!define COMPONENT_COLOR #E8F5E9
+
+title Recommendation Algorithm - Comprehensive Data Flow
+
+' Database Layer
+package "📊 Database (Supabase)" {
+    database "Appointments Table" as ApptsDB {
+        note right
+          id, patientId, doctorId
+          date, time_slot, rating
+          status, specialty, notes
+        end note
+    }
+    
+    database "Doctors Table" as DoctorsDB {
+        note right
+          id, name, specialty
+          email, available
+          qualifications
+        end note
+    }
+    
+    database "Doctor Schedules Table" as ScheduleDB {
+        note right
+          doctorId, date
+          time_slot, clockIn
+          clockOut, isApproved
+        end note
+    }
+}
+
+' Data Retrieval Layer
+package "🔍 Data Retrieval Services" #SERVICE_COLOR {
+    component "Patient Service" as PatientService {
+        note right
+          fetchAppointmentHistory()
+          getAvailableDoctorsForSlot()
+          isDoctorTimeslotAvailable()
+        end note
+    }
+    
+    component "Doctor Service" as DoctorService {
+        note right
+          getDoctorDetails()
+          getDoctorSchedule()
+          getAvailableTimeSlots()
+        end note
+    }
+}
+
+' Data Processing Layer
+package "⚙️ Recommendation Engine" #ENGINE_COLOR {
+    component "Recommendation Engine" as RecEngine {
+        note right
+          calculateAvgRating()
+          calculateScore()
+          getRecommendedDoctors()
+          getTopRecommendedDoctors()
+        end note
+    }
+    
+    component "Specialty Mapper" as SpecialtyMapper {
+        note right
+          APPOINTMENT_TYPE_SPECIALTIES
+          filterDoctorsBySpecialty()
+          matchPrimarySecondary()
+        end note
+    }
+}
+
+' Data Orchestration Layer
+package "🎯 Recommendation Service" #SERVICE_COLOR {
+    component "Recommendation Orchestrator" as RecService {
+        note right
+          fetchPatientHistory()
+          getAvailableDoctorsForType()
+          runRecommendationEngine()
+          formatResults()
+        end note
+    }
+}
+
+' UI Component Layer
+package "🖥️ React Components" #COMPONENT_COLOR {
+    component "Appointments Page" as ApptsPage {
+        note right
+          Captures user selections
+          Triggers recommendations
+          Displays filtered list
+        end note
+    }
+    
+    component "Recommended Doctors" as RecDoctors {
+        note right
+          Shows top 3 doctors
+          Displays scores/ratings
+          Handles doctor selection
+        end note
+    }
+    
+    component "Booking Confirmation" as BookingConfirm {
+        note right
+          Confirms final selection
+          Shows doctor details
+          Processes booking
+        end note
+    }
+}
+
+' Data Models
+package "📋 Data Models & Transformations" #ENTITY_COLOR {
+    entity "Appointment History" as AptHistory {
+        List of:
+        --
+        doctorId
+        doctorName
+        date
+        rating (1-5)
+        specialty
+    }
+    
+    entity "Available Doctors" as AvailDocs {
+        List of:
+        --
+        id
+        name
+        specialty
+        availability
+        lastVisit
+    }
+    
+    entity "Scored Doctors" as ScoredDocs {
+        List of:
+        --
+        id, name, specialty
+        score (0-100)
+        visits (count)
+        avgRating
+        availability
+    }
+    
+    entity "Top Recommendations" as TopRecs {
+        Limited to:
+        --
+        Top 3 doctors
+        With scores
+        With metadata
+    }
+}
+
+' Data Flows
+ApptsDB --> PatientService : "Query appointments\nby patientId"
+DoctorsDB --> PatientService : "Query doctors"
+DoctorsDB --> DoctorService : "Get doctor details"
+ScheduleDB --> DoctorService : "Check availability\nfor slot"
+
+PatientService --> AptHistory : "Retrieve patient's\nappointment history"
+PatientService --> AvailDocs : "Retrieve available\ndoctors + time slots"
+
+SpecialtyMapper --> AvailDocs : "Filter doctors\nby specialty"
+
+AptHistory --> RecEngine : "Input: User history\n(visits, ratings)"
+AvailDocs --> RecEngine : "Input: Available\ndoctors for slot"
+
+RecEngine --> ScoredDocs : "Calculate scores\nfor each doctor"
+
+ScoredDocs --> RecService : "Sort by score\ndescending"
+
+RecService --> TopRecs : "Slice top 3\nrecommendations"
+
+ApptsPage --> RecService : "Trigger: User selects\nappointment type + date + time"
+
+RecService --> RecDoctors : "Pass top 3\nrecommendations"
+
+RecDoctors --> BookingConfirm : "User clicks\n'Select Doctor'"
+
+BookingConfirm --> DoctorService : "Verify availability\none final time"
+
+DoctorService --> ApptsDB : "Create new\nappointment record"
+
+' Legend with flow details
+package "📌 Key Data Transformations" #F0F0F0 {
+    note right
+        🔄 Transformation 1: History Aggregation
+        - Raw appointments → Visit count per doctor
+        - Raw ratings → Average rating per doctor
+        
+        🔄 Transformation 2: Scoring
+        - Visit count + Rating → Recommendation score
+        - Score = 60% frequency + 40% rating (returning)
+        - Score = 80 + 20% rating bonus (new patient)
+        
+        🔄 Transformation 3: Sorting & Limiting
+        - Scored doctors → Sort by score DESC
+        - All doctors → Slice top 3
+        
+        🔄 Transformation 4: Formatting
+        - Score + visits/avg → Display string
+        - "5 visits • 4.8" or "New to you"
+    end note
+}
+
+' Scoring breakdown legend
+package "🎲 Scoring Formula Breakdown" #F0F0F0 {
+    note right
+        NEW PATIENTS (No History):
+        Score = 80 + (avgRating / 5) × 20
+        Range: 80-100
+        
+        RETURNING PATIENTS:
+        Score = 60 + frequencyScore + ratingScore
+        Where:
+          frequencyScore = min(visits / 5, 1) × 25
+          ratingScore = (avgRating / 5) × 15
+        Range: 0-100
+        
+        EXAMPLE SCORES:
+        • 5 visits, 5★ rating → 100
+        • 2 visits, 4★ rating → 82
+        • 0 visits, new patient → 80-100
+    end note
+}
+
+@enduml

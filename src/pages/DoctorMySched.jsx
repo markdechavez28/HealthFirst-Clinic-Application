@@ -48,6 +48,18 @@ function formatTimeDisplay(time24) {
   return `${hour12}:${minutes} ${ampm}`;
 }
 
+// Normalize time_slot to HH:MM format (strips seconds if present)
+function normalizeTimeSlot(timeSlot) {
+  if (!timeSlot) return "00:00";
+  
+  // If has seconds (HH:MM:SS), extract just HH:MM
+  if (timeSlot.length > 5) {
+    return timeSlot.substring(0, 5); // "09:00:23" → "09:00"
+  }
+  
+  return timeSlot; // Already in HH:MM format
+}
+
 // Check if a time has already passed for a given date
 function isTimePassed(date, time) {
   const now = new Date();
@@ -323,7 +335,7 @@ export default function DoctorMySched({ doctor, onLogout }) {
     // Get appointments for this date
     const dayAppointments = appointments.filter(a => a.appointment_date === dateStr);
     // Sort appointments by time (earliest to latest)
-    dayAppointments.sort((a, b) => (a.time_slot || "00:00").localeCompare(b.time_slot || "00:00"));
+    dayAppointments.sort((a, b) => normalizeTimeSlot(a.time_slot || "00:00").localeCompare(normalizeTimeSlot(b.time_slot || "00:00")));
     events.appointments = dayAppointments;
 
     return events;
@@ -744,7 +756,7 @@ export default function DoctorMySched({ doctor, onLogout }) {
                                           className="text-xs bg-purple-200 text-purple-900 p-1 rounded border border-purple-300 hover:bg-purple-300 transition cursor-pointer"
                                         >
                                           <div className="font-medium truncate">{appt.Patient?.name || 'Patient'}</div>
-                                          <div className="text-purple-800">{appt.time_slot}</div>
+                                          <div className="text-purple-800">{normalizeTimeSlot(appt.time_slot)}</div>
                                         </div>
                                       ))}
                                     </div>
@@ -1301,7 +1313,7 @@ export default function DoctorMySched({ doctor, onLogout }) {
 
               <div>
                 <p className="text-xs font-semibold text-slate-600 uppercase">Time</p>
-                <p className="text-sm text-slate-900">{formatTimeDisplay(selectedAppointment.time_slot)}</p>
+                <p className="text-sm text-slate-900">{formatTimeDisplay(normalizeTimeSlot(selectedAppointment.time_slot))}</p>
               </div>
 
               <div>

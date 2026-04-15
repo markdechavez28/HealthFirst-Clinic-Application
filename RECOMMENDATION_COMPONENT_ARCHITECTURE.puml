@@ -1,0 +1,266 @@
+@startuml RecommendationComponentArchitecture
+
+!define UI_COLOR #E3F2FD
+!define SERVICE_COLOR #FFF3E0
+!define UTIL_COLOR #F3E5F5
+!define DATA_COLOR #E8F5E9
+
+title Recommendation Algorithm - Component Architecture & Integration
+
+package "📱 UI Layer (React Components)" #UI_COLOR {
+    component "AppointmentsPage" as ApptsPage {
+        note right
+          Flow Control:
+          1. Handle type selection
+          2. Handle date selection
+          3. Handle time selection
+          4. Trigger recommendations
+          5. Display results
+          
+          State:
+          - selectedType
+          - selectedDate
+          - selectedTime
+          - recommendations[]
+          - recommendedDoctors[]
+        end note
+    }
+    
+    component "RecommendedDoctors" as RecDocsComponent {
+        note right
+          Props:
+          - doctors (array)
+          - onSelect (callback)
+          
+          Features:
+          - Display top 3
+          - Show scores
+          - Show ratings
+          - Handle selection
+        end note
+    }
+    
+    component "ChooseTime" as ChooseTime {
+        note right
+          Displays:
+          - Available time slots
+          - Doctor filters
+          - Recommended markers
+        end note
+    }
+}
+
+package "🔗 Service Layer (Data & Business Logic)" #SERVICE_COLOR {
+    component "RecommendationService" as RecService {
+        note right
+          Functions:
+          • getRecommendations()
+          • getTopDoctors()
+          • formatResults()
+          
+          Orchestrates:
+          - PatientService
+          - RecommendationEngine
+          - Specialty mapping
+        end note
+    }
+    
+    component "PatientService" as PatientService {
+        note right
+          Database Queries:
+          • fetchAppointmentHistory()
+          • getAvailableDoctorsForSlot()
+          • isDoctorTimeslotAvailable()
+          • createAppointment()
+          
+          Uses Supabase client
+        end note
+    }
+    
+    component "DoctorService" as DoctorService {
+        note right
+          Database Queries:
+          • getDoctorDetails()
+          • getDoctorSchedule()
+          • getAvailableTimeSlots()
+          • approveSchedule()
+        end note
+    }
+}
+
+package "⚙️ Utility Layer (Pure Functions)" #UTIL_COLOR {
+    component "RecommendationEngine" as RecEngine {
+        note right
+          Pure Functions:
+          • calculateAvgRating()
+          • calculateScore()
+          • getRecommendedDoctors()
+          • getTopRecommendedDoctors()
+          • formatRecommendationInfo()
+          
+          No side effects
+          No database calls
+          Fully testable
+        end note
+    }
+    
+    component "SpecialtyMapper" as SpecialtyMapper {
+        note right
+          Constants:
+          APPOINTMENT_TYPE_SPECIALTIES = {
+            "Skin consultation": {...},
+            "Eye examination": {...},
+            ...
+          }
+          
+          Functions:
+          • mapTypeToSpecialty()
+          • filterBySpecialty()
+        end note
+    }
+}
+
+package "💾 Data Layer (Database)" #DATA_COLOR {
+    database "Supabase" as Supabase {
+        note right
+          Tables:
+          • appointments
+          • doctors
+          • doctor_schedules
+          • patients
+        end note
+    }
+}
+
+package "📊 Hooks & Context" #UI_COLOR {
+    component "useNotification" as UseNotification {
+        note right
+          Displays feedback:
+          • Booking confirmed
+          • Error messages
+          • Loading states
+        end note
+    }
+}
+
+' Component Interactions
+
+ApptsPage --|> ApptsPage : "handleTypeSelect()"
+ApptsPage --|> ChooseTime : "Navigate to time selection"
+
+note on link
+  1. User selects appointment type
+end note
+
+ChooseTime --|> ApptsPage : "handleTimeSlotSelect()"
+
+note on link
+  2. User selects date & time slot
+end note
+
+ApptsPage --> RecService : "Call getRecommendations(\n  patientId, type, date, time)"
+
+note on link
+  3. Trigger recommendation engine
+end note
+
+RecService --> PatientService : "fetchAppointmentHistory(\n  patientId)"
+
+note on link
+  Step A: Get patient history
+end note
+
+PatientService --> Supabase : "SELECT * FROM appointments\nWHERE patientId = ?\nAND status = 'Completed'"
+
+Supabase --> PatientService : "Return appointments"
+
+PatientService --> RecService : "Return history array"
+
+RecService --> SpecialtyMapper : "Get specialty for type:\n  'Skin consultation' →\n  ['Dermatologist', 'Family Medicine']"
+
+SpecialtyMapper --> RecService : "Return specialty list"
+
+RecService --> PatientService : "getAvailableDoctorsForSlot(\n  specialties, date, time)"
+
+note on link
+  Step B: Get doctors for specialty
+end note
+
+PatientService --> DoctorService : "Query for:\n- Specialty match\n- Availability"
+
+PatientService --> Supabase : "SELECT * FROM doctors\nWHERE specialty IN (?, ?)"
+
+Supabase --> PatientService : "Return doctors"
+
+PatientService --> PatientService : "Filter by time slot\navailability"
+
+PatientService --> RecService : "Return available doctors"
+
+RecService --> RecEngine : "getTopRecommendedDoctors(\n  appointmentHistory,\n  availableDoctors, 3)"
+
+note on link
+  Step C: Score & rank
+end note
+
+RecEngine --> RecEngine : "For each available doctor:\n1. Look up visit stats\n2. Calculate score\n3. Sort DESC\n4. Slice top 3"
+
+RecEngine --> RecService : "Return scored doctors"
+
+RecService --> ApptsPage : "Return recommendations"
+
+ApptsPage --> RecDocsComponent : "Pass top 3 doctors"
+
+RecDocsComponent --> ApptsPage : "Display recommendations\n(user sees ranked doctors)"
+
+note on link
+  4. Display results
+end note
+
+RecDocsComponent --> ApptsPage : "onSelect(doctor)"
+
+note on link
+  5. User clicks doctor
+end note
+
+ApptsPage --> PatientService : "Verify final availability"
+
+PatientService --> Supabase : "isDoctorTimeslotAvailable()"
+
+Supabase --> PatientService : "✅ Confirmed available"
+
+PatientService --> Supabase : "INSERT appointment"
+
+Supabase --> PatientService : "✅ Appointment created"
+
+PatientService --> ApptsPage : "Success"
+
+ApptsPage --> UseNotification : "showSuccess('Booking confirmed')"
+
+ApptsPage --> ApptsPage : "Navigate to confirmation\npage"
+
+' Data Flow Annotation Box
+
+box "📋 Data Transformation Pipeline" #F0F0F0
+  note
+    **Input:** patientId, appointmentType, date, time
+    
+    **Transformation 1:** Raw appointments → Visit statistics
+    (count per doctor, avg rating)
+    
+    **Transformation 2:** Doctors list → Filtered by specialty
+    (Appointment type → Specialty specialty → Doctors)
+    
+    **Transformation 3:** Statistics + Doctors → Scored doctors
+    (Pure calculations: no DB calls)
+    
+    **Transformation 4:** Scored doctors → Sorted & limited
+    (Top 3 by score)
+    
+    **Transformation 5:** Doctor objects → Formatted for display
+    ("5 visits • 4.8" string)
+    
+    **Output:** [top 3 recommended doctors]
+  end note
+end box
+
+@enduml

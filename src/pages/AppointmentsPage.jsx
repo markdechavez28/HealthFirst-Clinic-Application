@@ -35,7 +35,6 @@ const APPOINTMENT_TYPES = [
   "Child health consultation",
   "Birth control consultation",
   "Laboratory test request",
-  "Medical certificate / clearance",
   "Travel health consultation",
   "Joint or bone pain",
 ];
